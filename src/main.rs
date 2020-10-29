@@ -31,10 +31,9 @@ fn main() {
 
   if !check_args(&args) { return; }
 
-  let path_string = args.get(1);
+  //let path_string = args.get(1);
 
   if let Some(p) = args.get(1) {
-
     let path = Path::new(p);
 
     println!("Valid base path: {:?}", path);
@@ -42,12 +41,9 @@ fn main() {
     if path.exists() && path.is_dir() {
       search_dmn_files(path);
     }
-
   } else {
     println!("Path argument is empty.");
   }
-
-
 }
 
 // TODO It would be better to check equality == 2 and display usage message when not true.
@@ -64,14 +60,16 @@ fn check_args(args: &Vec<String>) -> bool {
 }
 
 fn search_dmn_files(path: &Path) {
-  if path.is_dir() {
-    for entry in fs::read_dir(path).unwrap() {
-      if entry.is_ok() {
-        let path = entry.unwrap().path();
+  if let Ok(entries) = fs::read_dir(path) {
+    for entry in entries {
+      if let Ok(dir_entry) = entry {
+        let path = dir_entry.path();
         if path.is_dir() {
           search_dmn_files(&path);
-        } else if path.extension().is_some() && path.extension().unwrap().eq("dmn") {
-          send_content(path);
+        } else if let Some(ext) = path.extension() {
+          if ext == "dmn" {
+            send_content(path);
+          }
         }
       }
     }
@@ -87,4 +85,8 @@ fn send_content(path: PathBuf) {
 
     println!("{}", base64);
   }
+}
+
+fn usage() {
+  // display application usage
 }
