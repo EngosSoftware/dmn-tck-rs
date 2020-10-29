@@ -20,7 +20,6 @@
 
 use std::{env, fs};
 use std::path::{Path, PathBuf};
-use base64;
 
 /// Main entrypoint of the runner.
 fn main() {
@@ -40,6 +39,8 @@ fn main() {
 
     if path.exists() && path.is_dir() {
       search_dmn_files(path);
+    } else {
+      usage();
     }
   } else {
     println!("Path argument is empty.");
@@ -47,7 +48,7 @@ fn main() {
 }
 
 // TODO It would be better to check equality == 2 and display usage message when not true.
-fn check_args(args: &Vec<String>) -> bool {
+fn check_args(args: &[String]) -> bool {
   if args.len() < 2 {
     println!("Runner require command line argument with path.");
     return false;
@@ -56,7 +57,7 @@ fn check_args(args: &Vec<String>) -> bool {
     println!("Runner require only one command line argument.");
     return false;
   }
-  return true;
+  true
 }
 
 fn search_dmn_files(path: &Path) {
@@ -77,12 +78,9 @@ fn search_dmn_files(path: &Path) {
 }
 
 fn send_content(path: PathBuf) {
-  println!("{}", path.to_str().unwrap());
-  let content = fs::read_to_string(path);
-
-  if content.is_ok() {
-    let base64 = base64::encode(content.unwrap());
-
+  println!("{:?}", path.to_str());
+  if let Ok(content) = fs::read_to_string(path){
+    let base64 = base64::encode(content);
     println!("{}", base64);
   }
 }

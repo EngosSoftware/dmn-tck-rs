@@ -14,3 +14,4 @@ the proper error message should be printed to standard output.
 
 Iterators
 Formatting
+Slice
