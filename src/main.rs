@@ -24,72 +24,73 @@ use base64;
 
 /// Main entrypoint of the runner.
 fn main() {
-    println!("Starting DMN TCK Rust runner...");
-    let args: Vec<String> = env::args().collect();
+  println!("Starting DMN TCK Rust runner...");
+  let args: Vec<String> = env::args().collect();  // let args = env::args().collect::<Vec<String>>();
 
-    println!("{:?}", args);
+  println!("{:?}", args); // to jest Debug a nie Display // #[derive(Debug)]
 
-    if !check_args(&args) { return; }
+  if !check_args(&args) { return; }
 
-    let path_string = args.get(1);
+  let path_string = args.get(1);
 
-    let base_path = check_path(path_string);
+  let base_path = check_path(path_string);
 
-    if base_path.is_none() { return; }
+  if base_path.is_none() { return; }
 
-    println!("Valid base path: {:?}", base_path.unwrap());
+  println!("Valid base path: {:?}", base_path.unwrap());
 
-    search_dmn_files(base_path.unwrap());
+  search_dmn_files(base_path.unwrap());
 }
 
 fn check_args(args: &Vec<String>) -> bool {
-    if args.len() < 2 {
-        println!("Runner require command line argument with path.");
-        return false;
-    } else if args.len() > 2 {
-        println!("Runner require only one command line argument.");
-        return false;
-    }
-    return true;
+  if args.len() < 2 {
+    println!("Runner require command line argument with path.");
+    return false;
+  }
+  if args.len() > 2 {
+    println!("Runner require only one command line argument.");
+    return false;
+  }
+  return true;
 }
 
 fn check_path(path_string: Option<&String>) -> Option<&Path> {
-    if path_string.is_none() {
-        println!("Path argument is empty.");
-        return None;
-    }
-    let path = Path::new(path_string.unwrap());
+  if path_string.is_none() {
+    println!("Path argument is empty.");
+    return None;
+  }
+  let path = Path::new(path_string.unwrap());
 
-    if !path.exists() || !path.is_dir() {
-        println!("Path does not exists or is not a directory.");
-        return None;
-    }
+  if !path.exists() || !path.is_dir() {
+    println!("Path does not exists or is not a directory.");
+    return None;
+  }
 
-    return Some(path);
+  return Some(path);
 }
 
 fn search_dmn_files(path: &Path) {
-    if path.is_dir() {
-        for entry in fs::read_dir(path).unwrap() {
-            if entry.is_ok() {
-                let path = entry.unwrap().path();
-                if path.is_dir() {
-                    search_dmn_files(&path);
-                } else if path.extension().is_some() && path.extension().unwrap().eq("dmn") {
-                    send_content(path);
-                }
-            }
+  if path.is_dir() {
+    for entry in fs::read_dir(path).unwrap() {
+      if entry.is_ok() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+          search_dmn_files(&path);
+        } else if path.extension().is_some() && path.extension().unwrap().eq("dmn") {
+          send_content(path);
         }
+      }
     }
+  }
 }
 
 fn send_content(path: PathBuf) {
-    println!("{}", path.to_str().unwrap());
-    let content = fs::read_to_string(path);
+  println!("{}", path.to_str().unwrap());
+  let content = fs::read_to_string(path);
 
-    if content.is_ok() {
-        let base64 = base64::encode(content.unwrap());
+  if content.is_ok() {
+    let base64 = base64::encode(content.unwrap());
 
-        println!("{}", base64);
-    }
+    println!("{}", base64);
+  }
 }

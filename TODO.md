@@ -10,3 +10,7 @@ Before the runner starts, there must be a check if the given
 argument is a directory and this directory exists in file system.
 If specified argument is not a directory or does not exist,
 the proper error message should be printed to standard output. 
+
+
+Iterators
+Formatting
