@@ -34,16 +34,20 @@ fn main() {
   let path_string = args.get(1);
 
   if let Some(p) = args.get(1) {
-    // do something more...
+
+    let path = Path::new(p);
+
+    println!("Valid base path: {:?}", path);
+
+    if path.exists() && path.is_dir() {
+      search_dmn_files(path);
+    }
+
+  } else {
+    println!("Path argument is empty.");
   }
 
-  let base_path = check_path(path_string);
 
-  if base_path.is_none() { return; }
-
-  println!("Valid base path: {:?}", base_path.unwrap());
-
-  search_dmn_files(base_path.unwrap());
 }
 
 // TODO It would be better to check equality == 2 and display usage message when not true.
@@ -57,21 +61,6 @@ fn check_args(args: &Vec<String>) -> bool {
     return false;
   }
   return true;
-}
-
-fn check_path(path_string: Option<&String>) -> Option<&Path> {
-  if path_string.is_none() {
-    println!("Path argument is empty.");
-    return None;
-  }
-  let path = Path::new(path_string.unwrap());
-
-  if !path.exists() || !path.is_dir() {
-    println!("Path does not exists or is not a directory.");
-    return None;
-  }
-
-  return Some(path);
 }
 
 fn search_dmn_files(path: &Path) {
