@@ -18,8 +18,9 @@
 //!
 //!
 
-use std::env;
-use std::path::Path;
+use std::{env, fs};
+use std::path::{Path, PathBuf};
+use base64;
 
 /// Main entrypoint of the runner.
 fn main() {
@@ -37,6 +38,8 @@ fn main() {
     if base_path.is_none() { return; }
 
     println!("Valid base path: {:?}", base_path.unwrap());
+
+    search_dmn_files(base_path.unwrap());
 }
 
 fn check_args(args: &Vec<String>) -> bool {
@@ -63,4 +66,30 @@ fn check_path(path_string: Option<&String>) -> Option<&Path> {
     }
 
     return Some(path);
+}
+
+fn search_dmn_files(path: &Path) {
+    if path.is_dir() {
+        for entry in fs::read_dir(path).unwrap() {
+            if entry.is_ok() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    search_dmn_files(&path);
+                } else if path.extension().is_some() && path.extension().unwrap().eq("dmn") {
+                    send_content(path);
+                }
+            }
+        }
+    }
+}
+
+fn send_content(path: PathBuf) {
+    println!("{}", path.to_str().unwrap());
+    let content = fs::read_to_string(path);
+
+    if content.is_ok() {
+        let base64 = base64::encode(content.unwrap());
+
+        println!("{}", base64);
+    }
 }

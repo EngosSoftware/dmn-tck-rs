@@ -5,3 +5,5 @@ authors = ["Dariusz Depta <dariusz.depta@engos.software>"]
 edition = "2018"
 
 [dependencies]
+base64 = "0.13.0"
+reqwest = "0.10.8"
