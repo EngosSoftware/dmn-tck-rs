@@ -33,6 +33,10 @@ fn main() {
 
   let path_string = args.get(1);
 
+  if let Some(p) = args.get(1) {
+    // do something more...
+  }
+
   let base_path = check_path(path_string);
 
   if base_path.is_none() { return; }
@@ -42,6 +46,7 @@ fn main() {
   search_dmn_files(base_path.unwrap());
 }
 
+// TODO It would be better to check equality == 2 and display usage message when not true.
 fn check_args(args: &Vec<String>) -> bool {
   if args.len() < 2 {
     println!("Runner require command line argument with path.");
