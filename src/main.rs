@@ -18,9 +18,28 @@
 //!
 //!
 
-use std::{env, fs};
-use std::path::{Path, PathBuf};
+#![feature(proc_macro_hygiene, decl_macro)]
+
+#[macro_use]
+extern crate serde_derive;
+
 use http::Uri;
+use reqwest::blocking::Client;
+use std::path::{Path, PathBuf};
+use std::{env, fs};
+
+const URL: &str = "http://0.0.0.0:12000/dpl";
+
+/// Parameters for deploying definitions from *.dmn files.
+#[derive(Serialize)]
+pub struct DeployDefinitionsParams {
+  /// URI from which the file content is transmitted.
+  #[serde(rename = "file")]
+  file: String,
+  /// DMN definition file content (Base64 encoded).
+  #[serde(rename = "content")]
+  content: String,
+}
 
 /// Main entrypoint of the runner.
 fn main() {
@@ -30,7 +49,8 @@ fn main() {
     let dir_path = Path::new(dir_name);
     println!("Searching DMN files in directory: {:?}", dir_path);
     if dir_path.exists() && dir_path.is_dir() {
-      let count = process_dmn_files(dir_path);
+      let client = reqwest::blocking::Client::new();
+      let count = process_dmn_files(dir_path, &client);
       println!("Processed {} files.", count);
       return;
     }
@@ -38,17 +58,17 @@ fn main() {
   usage();
 }
 
-fn process_dmn_files(path: &Path) -> u64 {
+fn process_dmn_files(path: &Path, client: &Client) -> u64 {
   let mut count = 0;
   if let Ok(entries) = fs::read_dir(path) {
     for entry in entries {
       if let Ok(dir_entry) = entry {
         let path = dir_entry.path();
         if path.is_dir() {
-          count += process_dmn_files(&path);
+          count += process_dmn_files(&path, client);
         } else if let Some(ext) = path.extension() {
           if ext == "dmn" {
-            deploy_dmn_definitions(&path);
+            deploy_dmn_definitions(&path, client);
             count += 1;
           }
         }
@@ -58,14 +78,27 @@ fn process_dmn_files(path: &Path) -> u64 {
   count
 }
 
-fn deploy_dmn_definitions(path: &PathBuf) {
+fn deploy_dmn_definitions(path: &PathBuf, client: &Client) {
   if let Ok(canonical) = fs::canonicalize(path) {
-    if let Some(a) = canonical.to_str() {
-      if let Ok(file_href) = Uri::builder().scheme("file").authority("localhost").path_and_query(a).build() {
+    if let Some(p_and_q) = canonical.to_str() {
+      if let Ok(file_href) = Uri::builder()
+        .scheme("file")
+        .authority("localhost")
+        .path_and_query(p_and_q)
+        .build()
+      {
         println!("Deploying: {}", file_href);
         if let Ok(content) = fs::read_to_string(canonical) {
-          let base64 = base64::encode(content);
-          println!("{}", base64);
+          let params = DeployDefinitionsParams {
+            file: file_href.to_string(),
+            content: base64::encode(content),
+          };
+          match client.post(URL).json(&params).send() {
+            Ok(response) => {
+              println!("{:?}\n", response.text().unwrap());
+            }
+            Err(reason) => println!("ERROR: {:?}", reason),
+          }
         }
       }
     }
