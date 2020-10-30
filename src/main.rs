@@ -20,71 +20,58 @@
 
 use std::{env, fs};
 use std::path::{Path, PathBuf};
+use http::Uri;
 
 /// Main entrypoint of the runner.
 fn main() {
-  println!("Starting DMN TCK Rust runner...");
-  let args: Vec<String> = env::args().collect();  // let args = env::args().collect::<Vec<String>>();
-
-  println!("{:?}", args); // to jest Debug a nie Display // #[derive(Debug)]
-
-  if !check_args(&args) { return; }
-
-  //let path_string = args.get(1);
-
-  if let Some(p) = args.get(1) {
-    let path = Path::new(p);
-
-    println!("Valid base path: {:?}", path);
-
-    if path.exists() && path.is_dir() {
-      search_dmn_files(path);
-    } else {
-      usage();
+  println!("Starting DMN TCK runner...");
+  let args: Vec<String> = env::args().collect();
+  if let Some(dir_name) = args.get(1) {
+    let dir_path = Path::new(dir_name);
+    println!("Searching DMN files in directory: {:?}", dir_path);
+    if dir_path.exists() && dir_path.is_dir() {
+      let count = process_dmn_files(dir_path);
+      println!("Processed {} files.", count);
+      return;
     }
-  } else {
-    println!("Path argument is empty.");
   }
+  usage();
 }
 
-// TODO It would be better to check equality == 2 and display usage message when not true.
-fn check_args(args: &[String]) -> bool {
-  if args.len() < 2 {
-    println!("Runner require command line argument with path.");
-    return false;
-  }
-  if args.len() > 2 {
-    println!("Runner require only one command line argument.");
-    return false;
-  }
-  true
-}
-
-fn search_dmn_files(path: &Path) {
+fn process_dmn_files(path: &Path) -> u64 {
+  let mut count = 0;
   if let Ok(entries) = fs::read_dir(path) {
     for entry in entries {
       if let Ok(dir_entry) = entry {
         let path = dir_entry.path();
         if path.is_dir() {
-          search_dmn_files(&path);
+          count += process_dmn_files(&path);
         } else if let Some(ext) = path.extension() {
           if ext == "dmn" {
-            send_content(path);
+            deploy_dmn_definitions(&path);
+            count += 1;
           }
+        }
+      }
+    }
+  }
+  count
+}
+
+fn deploy_dmn_definitions(path: &PathBuf) {
+  if let Ok(canonical) = fs::canonicalize(path) {
+    if let Some(a) = canonical.to_str() {
+      if let Ok(file_href) = Uri::builder().scheme("file").authority("localhost").path_and_query(a).build() {
+        println!("Deploying: {}", file_href);
+        if let Ok(content) = fs::read_to_string(canonical) {
+          let base64 = base64::encode(content);
+          println!("{}", base64);
         }
       }
     }
   }
 }
 
-fn send_content(path: PathBuf) {
-  println!("{:?}", path.to_str());
-  if let Ok(content) = fs::read_to_string(path){
-    let base64 = base64::encode(content);
-    println!("{}", base64);
-  }
-}
-
 fn usage() {
-  // display application usage
+  println!("Do the help, please...")
 }
