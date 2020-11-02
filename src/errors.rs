@@ -2,6 +2,8 @@
 pub enum RunnerError {
   ReadingFileFailed(String),
   ParsingXMLFailed(String),
-  XMLExpectedMandatoryNode(String),
+  XmlExpectedMandatoryNode(String),
   XmlExpectedMandatoryTextContent(String),
+  XmlExpectedMandatoryAttribute(String),
+  XmlExpectedNode(String),
 }
