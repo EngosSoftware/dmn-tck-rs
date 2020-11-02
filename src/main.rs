@@ -23,10 +23,14 @@
 #[macro_use]
 extern crate serde_derive;
 
+use crate::model::parse_from_file;
 use http::Uri;
 use reqwest::blocking::Client;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
+
+mod errors;
+mod model;
 
 const URL: &str = "http://0.0.0.0:12000/dpl";
 
@@ -50,8 +54,10 @@ fn main() {
     println!("Searching DMN files in directory: {:?}", dir_path);
     if dir_path.exists() && dir_path.is_dir() {
       let client = reqwest::blocking::Client::new();
-      let count = process_dmn_files(dir_path, &client);
-      println!("Processed {} files.", count);
+      let mut count = process_dmn_files(dir_path, &client);
+      println!("\nProcessed {} *.dmn files.\n", count);
+      count = process_xml_files(dir_path, &client);
+      println!("\nProcessed {} *.xml files.\n", count);
       return;
     }
   }
@@ -102,6 +108,34 @@ fn deploy_dmn_definitions(path: &PathBuf, client: &Client) {
         }
       }
     }
+  }
+}
+
+fn process_xml_files(path: &Path, client: &Client) -> u64 {
+  let mut count = 0;
+  if let Ok(entries) = fs::read_dir(path) {
+    for entry in entries {
+      if let Ok(dir_entry) = entry {
+        let path = dir_entry.path();
+        if path.is_dir() {
+          count += process_xml_files(&path, client);
+        } else if let Some(ext) = path.extension() {
+          if ext == "xml" {
+            execute_tests(&path, client);
+            count += 1;
+          }
+        }
+      }
+    }
+  }
+  count
+}
+
+fn execute_tests(path: &PathBuf, _client: &Client) {
+  println!("Executing tests from file: {}", path.display());
+  match parse_from_file(path) {
+    Ok(test_cases) => println!("{:?}", test_cases),
+    Err(reason) => println!("{:?}", reason),
   }
 }
 
