@@ -25,3 +25,5 @@ pub enum RunnerError {
   XmlExpectedMandatoryTextContent(String),
   XmlExpectedMandatoryAttribute(String),
 }
+
+// TODO Implement Display trait to make error reporting more verbose and use friendly.
