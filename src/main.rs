@@ -15,15 +15,15 @@
  */
 
 //! Runner for Decision Model and Notation™ Technology Compatibility Kit written in Rust.
-//!
-//!
-
-#![feature(proc_macro_hygiene, decl_macro)]
 
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate lazy_static;
 
+use crate::errors::RunnerError;
 use crate::model::{parse_from_file, TestCases};
+use crate::validator::validate_test_cases_file;
 use http::Uri;
 use reqwest::blocking::Client;
 use std::path::{Path, PathBuf};
@@ -31,6 +31,7 @@ use std::{env, fs};
 
 mod errors;
 mod model;
+mod validator;
 
 const URL: &str = "http://0.0.0.0:12000/dpl";
 
@@ -54,10 +55,11 @@ fn main() {
     println!("Searching DMN files in directory: {:?}", dir_path);
     if dir_path.exists() && dir_path.is_dir() {
       let client = reqwest::blocking::Client::new();
-      let mut count = process_dmn_files(dir_path, &client);
+      let count = process_dmn_files(dir_path, &client);
       println!("\nProcessed {} *.dmn files.\n", count);
-      count = process_xml_files(dir_path, &client);
-      println!("\nProcessed {} *.xml files.\n", count);
+      if let Ok(count) = process_xml_files(dir_path, &client) {
+        println!("\nProcessed {} *.xml files.\n", count);
+      }
       return;
     }
   }
@@ -87,12 +89,7 @@ fn process_dmn_files(path: &Path, client: &Client) -> u64 {
 fn deploy_dmn_definitions(path: &PathBuf, client: &Client) {
   if let Ok(canonical) = fs::canonicalize(path) {
     if let Some(p_and_q) = canonical.to_str() {
-      if let Ok(file_href) = Uri::builder()
-        .scheme("file")
-        .authority("localhost")
-        .path_and_query(p_and_q)
-        .build()
-      {
+      if let Ok(file_href) = Uri::builder().scheme("file").authority("localhost").path_and_query(p_and_q).build() {
         println!("Deploying: {}", file_href);
         if let Ok(content) = fs::read_to_string(canonical) {
           let params = DeployDefinitionsParams {
@@ -111,35 +108,36 @@ fn deploy_dmn_definitions(path: &PathBuf, client: &Client) {
   }
 }
 
-fn process_xml_files(path: &Path, client: &Client) -> u64 {
+fn process_xml_files(path: &Path, client: &Client) -> Result<u64, RunnerError> {
   let mut count = 0;
   if let Ok(entries) = fs::read_dir(path) {
     for entry in entries {
       if let Ok(dir_entry) = entry {
         let path = dir_entry.path();
         if path.is_dir() {
-          count += process_xml_files(&path, client);
+          count += process_xml_files(&path, client)?;
         } else if let Some(ext) = path.extension() {
           if ext == "xml" {
-            execute_tests(&path, client);
+            execute_tests(&path, client)?;
             count += 1;
           }
         }
       }
     }
   }
-  count
+  Ok(count)
 }
 
-fn execute_tests(path: &PathBuf, _client: &Client) {
-  let file_name = format!("{}", path.display());
-  println!("Executing test cases from file: {}", file_name);
-  match parse_from_file(path) {
-    Ok(test_cases) => {
-      display_report(&test_cases);
-    }
-    Err(reason) => println!("ERROR: {:?}", reason),
-  }
+fn execute_tests(path: &PathBuf, _client: &Client) -> Result<(), RunnerError> {
+  println!("\nProcessing file: {}", path.display());
+  print!("Validating...");
+  validate_test_cases_file(&path)?;
+  print!("OK");
+  print!(",  Parsing...");
+  let test_cases = parse_from_file(path)?;
+  println!("OK");
+  display_report(&test_cases);
+  Ok(())
 }
 
 fn display_report(test_cases: &TestCases) {

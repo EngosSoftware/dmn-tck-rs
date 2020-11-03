@@ -70,6 +70,8 @@ version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
  "http",
+ "lazy_static",
+ "libc",
  "reqwest",
  "roxmltree",
  "serde",
