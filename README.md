@@ -1,11 +1,12 @@
 # DMN™ TCK Rust runner
 
-This is a Rust runner implementation to help vendors automate test 
+This is a Rust implementation of the TCK runner. to help vendors automate test 
 execution for their products, in case they wish to use Rust.
 
 ## License
 
-Licensed under the Apache License, Version 2.0, see LICENSE file for more details. 
+Licensed under the Apache License, Version 2.0.
+See LICENSE for details. 
 
 ### Trademark Legal Notice
 
