@@ -23,7 +23,7 @@
 #[macro_use]
 extern crate serde_derive;
 
-use crate::model::parse_from_file;
+use crate::model::{parse_from_file, TestCases};
 use http::Uri;
 use reqwest::blocking::Client;
 use std::path::{Path, PathBuf};
@@ -132,11 +132,18 @@ fn process_xml_files(path: &Path, client: &Client) -> u64 {
 }
 
 fn execute_tests(path: &PathBuf, _client: &Client) {
-  println!("Executing tests from file: {}", path.display());
+  let file_name = format!("{}", path.display());
+  println!("Executing test cases from file: {}", file_name);
   match parse_from_file(path) {
-    Ok(test_cases) => println!("{:?}", test_cases),
-    Err(reason) => println!("{:?}", reason),
+    Ok(test_cases) => {
+      display_report(&test_cases);
+    }
+    Err(reason) => println!("ERROR: {:?}", reason),
   }
+}
+
+fn display_report(test_cases: &TestCases) {
+  println!("{:?}", test_cases)
 }
 
 fn usage() {

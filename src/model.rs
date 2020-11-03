@@ -36,6 +36,7 @@ const NODE_RESULT_NODE: &str = "resultNode";
 const NODE_TEST_CASE: &str = "testCase";
 const NODE_TEST_CASES: &str = "testCases";
 
+const ATTR_ID: &str = "id";
 const ATTR_NAME: &str = "name";
 const ATTR_NIL: &str = "nil";
 const ATTR_TYPE: &str = "type";
@@ -51,6 +52,8 @@ pub struct TestCases {
 /// Single test case.
 #[derive(Debug)]
 pub struct TestCase {
+  /// Required identifier of the test case.
+  pub id: String,
   pub description: Option<String>,
   pub input_nodes: Vec<InputNode>,
   pub result_nodes: Vec<ResultNode>,
@@ -59,6 +62,7 @@ pub struct TestCase {
 /// Input node defined for test case.
 #[derive(Debug)]
 pub struct InputNode {
+  /// Required name for input node.
   pub name: String,
   pub value: Option<ValueType>,
 }
@@ -74,11 +78,11 @@ pub struct ResultNode {
 /// Value representing single result of a test case.
 #[derive(Debug)]
 pub struct Value {
-  /// XSI type of the value.
+  /// Type of the value in `xsi` namespace.
   pub xsi_type: Option<String>,
-  /// XSI nil value.
+  /// Nillable value from `xsi` namespace.
   pub xsi_nil: Option<String>,
-  /// Optional, textual representation of the value.
+  /// Optional value represented as text.
   pub text: Option<String>,
 }
 
@@ -100,16 +104,16 @@ pub enum ValueType {
 
 /// Reads the XML file containing test cases.
 /// This function reads the whole file into string and passes it to further processing.
-pub fn parse_from_file(file_path: &Path) -> Result<TestCases, RunnerError> {
-  match read_to_string(Path::new(file_path)) {
-    Ok(content) => parse_from_xml(&content),
+pub fn parse_from_file(p: &Path) -> Result<TestCases, RunnerError> {
+  match read_to_string(p) {
+    Ok(content) => parse_from_string(&content),
     Err(reason) => Err(ReadingFileFailed(format!("{}", reason))),
   }
 }
 
 /// Parses XML file containing test cases.
-fn parse_from_xml(xml: &str) -> Result<TestCases, RunnerError> {
-  match roxmltree::Document::parse(&xml) {
+fn parse_from_string(s: &str) -> Result<TestCases, RunnerError> {
+  match roxmltree::Document::parse(&s) {
     Ok(document) => {
       let test_cases_node = document.root_element();
       if test_cases_node.tag_name().name() != NODE_TEST_CASES {
@@ -147,6 +151,7 @@ fn parse_test_cases(node: &Node) -> Result<Vec<TestCase>, RunnerError> {
   let mut items = vec![];
   for ref test_case_node in node.children().filter(|n| n.tag_name().name() == NODE_TEST_CASE) {
     items.push(TestCase {
+      id: required_attribute(test_case_node, ATTR_ID)?,
       description: optional_child_required_content(test_case_node, NODE_DESCRIPTION)?,
       input_nodes: parse_input_nodes(test_case_node)?,
       result_nodes: parse_result_nodes(test_case_node)?,
@@ -253,5 +258,49 @@ fn optional_child_required_content(node: &Node, child_name: &str) -> Result<Opti
     Ok(required_content(&child_node).ok())
   } else {
     Ok(None)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::model::parse_from_string;
+
+  #[test]
+  fn test_001() {
+    let input = r#"<?xml version="1.0" encoding="UTF-8"?>
+      <testCases xmlns="http://www.omg.org/spec/DMN/20160719/testcase"
+                 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+        <modelName>0001-input-data-string.dmn</modelName>
+        <labels>
+          <label>Compliance Level 2</label>
+          <label>Literal Expression</label>
+          <label>FEEL Special-character Names</label>
+          <label>Data Type: String</label>
+        </labels>
+        <testCase id="001">
+          <description>Testing valid input</description>
+          <inputNode name="Full Name">
+            <value xsi:type="xsd:string">John Doe</value>
+          </inputNode>
+          <resultNode name="Greeting Message" type="decision">
+            <expected>
+              <value xsi:type="xsd:string">Hello John Doe</value>
+            </expected>
+          </resultNode>
+        </testCase>
+      </testCases>
+    "#;
+    let test_cases = parse_from_string(input).unwrap();
+    assert_eq!("0001-input-data-string.dmn", test_cases.model_name.unwrap().as_str());
+    assert_eq!(4, test_cases.labels.len());
+    assert_eq!("Compliance Level 2", test_cases.labels[0].as_str());
+    assert_eq!("Literal Expression", test_cases.labels[1].as_str());
+    assert_eq!("FEEL Special-character Names", test_cases.labels[2].as_str());
+    assert_eq!("Data Type: String", test_cases.labels[3].as_str());
+    assert_eq!(1, test_cases.test_cases.len());
+    let test_case_1 = &test_cases.test_cases[0];
+    assert_eq!("001", test_case_1.id.as_str());
+    assert_eq!("Testing valid input", test_case_1.description.as_ref().unwrap().as_str());
   }
 }

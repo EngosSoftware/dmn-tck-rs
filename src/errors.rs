@@ -5,5 +5,4 @@ pub enum RunnerError {
   XmlExpectedMandatoryNode(String),
   XmlExpectedMandatoryTextContent(String),
   XmlExpectedMandatoryAttribute(String),
-  XmlExpectedNode(String),
 }
