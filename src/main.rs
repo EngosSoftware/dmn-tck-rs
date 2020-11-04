@@ -32,7 +32,10 @@ use std::{env, fs};
 
 mod errors;
 mod model;
+#[cfg_attr(target_os = "linux", path = "validator.rs")]
+#[cfg_attr(not(target_os = "linux"), path = "validator_non_linux.rs")]
 mod validator;
+mod validator_non_linux;
 
 // URL of the endpoint for deploying decision models
 const CONFIG_DEPLOY_URL: &str = "http://0.0.0.0:12000/dpl";
