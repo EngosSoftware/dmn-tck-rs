@@ -1,12 +1,12 @@
-# DMN™ TCK Rust runner
+# DMN™ Technology Compatibility Kit runner written in Rust
 
-This is a Rust implementation of the TCK runner. to help vendors automate test 
-execution for their products, in case they wish to use Rust.
+This is a Rust implementation of the [DMN™ Technology Compatibility Kit](https://dmn-tck.github.io/tck/) **runner**.
+This runner i provided to help vendors automate test execution for their products,
+in case they wish to use [Rust](https://www.rust-lang.org/).
 
 ## License
 
-Licensed under the Apache License, Version 2.0.
-See LICENSE for details. 
+Licensed under the Apache License, Version 2.0. See LICENSE for details. 
 
 ### Trademark Legal Notice
 
