@@ -39,6 +39,8 @@ const NODE_TEST_CASE: &str = "testCase";
 const NODE_TEST_CASES: &str = "testCases";
 const NODE_VALUE: &str = "value";
 
+const ATTR_CAST: &str = "cast";
+const ATTR_ERROR_RESULT: &str = "errorResult";
 const ATTR_ID: &str = "id";
 const ATTR_INVOCABLE_NAME: &str = "invocableName";
 const ATTR_NAME: &str = "name";
@@ -91,6 +93,9 @@ pub struct InputNode {
 #[derive(Debug)]
 pub struct ResultNode {
   pub name: String,
+  pub error_result: bool,
+  pub typ: Option<String>,
+  pub cast: Option<String>,
   pub expected: Option<ValueType>,
   pub computed: Option<ValueType>,
 }
@@ -228,6 +233,9 @@ fn parse_result_nodes(node: &Node) -> Result<Vec<ResultNode>, RunnerError> {
   for ref result_node in node.children().filter(|n| n.tag_name().name() == NODE_RESULT_NODE) {
     items.push(ResultNode {
       name: required_attribute(result_node, ATTR_NAME)?,
+      error_result: optional_attribute(result_node, ATTR_ERROR_RESULT).map_or(false, |v| v == "true"),
+      typ: optional_attribute(result_node, ATTR_TYPE),
+      cast: optional_attribute(result_node, ATTR_CAST),
       expected: parse_child_value_type(result_node, NODE_EXPECTED)?,
       computed: parse_child_value_type(result_node, NODE_COMPUTED)?,
     })
