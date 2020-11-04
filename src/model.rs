@@ -19,6 +19,7 @@
 use crate::errors::RunnerError;
 use crate::errors::RunnerError::*;
 use roxmltree::Node;
+use serde::export::Formatter;
 use std::fs::read_to_string;
 use std::path::Path;
 
@@ -61,6 +62,16 @@ pub enum TestCaseType {
   Decision,
   BusinessKnowledgeModel,
   DecisionService,
+}
+
+impl std::fmt::Display for TestCaseType {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      TestCaseType::Decision => write!(f, "decision"),
+      TestCaseType::BusinessKnowledgeModel => write!(f, "bkm"),
+      TestCaseType::DecisionService => write!(f, "decisionService"),
+    }
+  }
 }
 
 /// Single test case.
