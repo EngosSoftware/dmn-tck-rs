@@ -28,9 +28,11 @@ use http::Uri;
 use reqwest::blocking::Client;
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use std::fs;
+use std::{fs, io};
 use std::collections::BTreeMap;
 use serde_yaml::{from_str, Error};
+use std::any::Any;
+use csv::QuoteStyle;
 
 mod errors;
 mod model;
@@ -93,10 +95,10 @@ fn main() {
 
 fn get_config() -> Option<String> {
   if let Ok(file_content) = fs::read_to_string("runner.yml") {
-    let deserialized_map :Result<BTreeMap<String,String>, Error> = from_str(&file_content);
+    let deserialized_map: Result<BTreeMap<String, String>, Error> = from_str(&file_content);
     if let Ok(map) = deserialized_map {
       if let Some(dir_path) = map.get(CONFIG_DIR_PATH_NAME) {
-        return Some(dir_path.clone())
+        return Some(dir_path.clone());
       }
     } else {
       println!("Cannot read runner.yml")
@@ -205,11 +207,52 @@ fn execute_tests(path: &PathBuf, client: &Client) -> Result<(), RunnerError> {
       println!("OK");
     }
   }
-  display_report(&test_cases);
+  display_report(&path, &test_cases);
   Ok(())
 }
 
-fn display_report(_test_cases: &TestCases) {
+fn display_report(path: &PathBuf, test_cases: &TestCases) {
+  let mut wtr = csv::WriterBuilder::new()
+    .delimiter(b',')
+    .quote_style(QuoteStyle::Always)
+    .double_quote(true)
+    .from_writer(io::stdout());
+
+  wtr.write_record(&["Directory name", "File name", "Test id", "Test result", "Remarks"]);
+  for test_case in &test_cases.test_cases {
+    let mut file_name = "";
+    if let Some(path_os) = path.file_stem() {
+      if let Some(path_str) = path_os.to_str() {
+        file_name = path_str;
+      }
+    }
+
+    let mut dir_name = "";
+    if let Some(dir_str) = path.parent() {
+      if let Some(dir) = dir_str.to_str() {
+        dir_name = dir;
+      }
+    }
+
+    let mut test_id = "";
+    if let Some(id_ref) = test_case.id.as_ref() {
+      test_id = id_ref.as_str();
+    }
+
+    let mut test_result = "IGNORED";
+    for result in &test_case.result_nodes {
+      if result.error_result {
+        test_result = "FAILURE"
+      } else if let Some(expected) = &result.expected {
+        if let Some(computed) = &result.computed {
+          if expected.type_id() == computed.type_id() {
+            test_result = "SUCCESS"
+          }
+        }
+      }
+    }
+    wtr.write_record(&[dir_name, file_name, test_id, test_result, ""]);
+  }
   // println!("{:?}", test_cases)
 }
 
