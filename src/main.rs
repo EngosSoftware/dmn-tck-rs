@@ -28,7 +28,9 @@ use http::Uri;
 use reqwest::blocking::Client;
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use std::{env, fs};
+use std::fs;
+use std::collections::BTreeMap;
+use serde_yaml::{from_str, Error};
 
 mod errors;
 mod model;
@@ -42,6 +44,11 @@ const CONFIG_DEPLOY_URL: &str = "http://0.0.0.0:12000/dpl";
 
 // URL of the endpoint for evaluating decision artifact
 const CONFIG_EVALUATE_URL: &str = "http://0.0.0.0:12000/evl";
+
+// Names of property in runner.yml file
+// const CONFIG_DEPLOY_URL_NAME: &str = "deploy_url";
+// const CONFIG_EVALUATE_URL_NAME: &str = "evaluate_url";
+const CONFIG_DIR_PATH_NAME: &str = "dir_path";
 
 /// Parameters for deploying definitions from *.dmn files.
 #[derive(Serialize)]
@@ -68,9 +75,8 @@ pub struct EvaluateParams {
 /// Main entrypoint of the runner.
 fn main() {
   println!("Starting DMN TCK runner...");
-  let args: Vec<String> = env::args().collect();
-  if let Some(dir_name) = args.get(1) {
-    let dir_path = Path::new(dir_name);
+  if let Some(dir_name) = get_config() {
+    let dir_path = Path::new(&dir_name);
     println!("Searching DMN files in directory: {:?}", dir_path);
     if dir_path.exists() && dir_path.is_dir() {
       let client = reqwest::blocking::Client::new();
@@ -83,6 +89,22 @@ fn main() {
     }
   }
   usage();
+}
+
+fn get_config() -> Option<String> {
+  if let Ok(file_content) = fs::read_to_string("runner.yml") {
+    let deserialized_map :Result<BTreeMap<String,String>, Error> = from_str(&file_content);
+    if let Ok(map) = deserialized_map {
+      if let Some(dir_path) = map.get(CONFIG_DIR_PATH_NAME) {
+        return Some(dir_path.clone())
+      }
+    } else {
+      println!("Cannot read runner.yml")
+    }
+  } else {
+    println!("Cannot find runner.yml")
+  }
+  None
 }
 
 fn process_dmn_files(path: &Path, client: &Client) -> u64 {
