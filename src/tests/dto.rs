@@ -14,16 +14,16 @@
  *  limitations under the License.
  */
 
-//! Error definitions.
+//! Test cases for DTOs.
 
-#[derive(Debug, PartialEq)]
-pub enum RunnerError {
-  ReadingFileFailed(String),
-  ParsingXMLFailed(String),
-  ValidatingXMLFailed(i32),
-  XmlExpectedMandatoryNode(String),
-  XmlExpectedMandatoryTextContent(String),
-  XmlExpectedMandatoryAttribute(String),
+use crate::dto::InputNodeDto;
+use crate::model::parse_from_string;
+use crate::tests::{INPUTS_0001, TC_0001};
+
+#[test]
+fn test_input_nodes_value() {
+  let test_cases = parse_from_string(TC_0001).unwrap();
+  let test_case = &test_cases.test_cases[0];
+  let input_node_dto = InputNodeDto::from(&test_case.input_nodes[0]);
+  assert_eq!(INPUTS_0001, serde_json::to_string_pretty(&input_node_dto).unwrap().as_str());
 }
-
-// TODO Implement Display trait to make error reporting more verbose and user friendly.

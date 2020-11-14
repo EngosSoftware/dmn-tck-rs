@@ -1,3 +1,3 @@
-dir_path: testCases
+dir_path: ./dmn-tck/TestCases
 deploy_url: http://0.0.0.0:12000/dpl
 evaluate_url: http://0.0.0.0:12000/evl

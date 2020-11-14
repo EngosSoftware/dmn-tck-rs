@@ -5,13 +5,14 @@ authors = ["Dariusz Depta <dariusz.depta@engos.software>"]
 edition = "2018"
 
 [dependencies]
-base64 = "^0.13.0"
+lazy_static = "^1.4.0"
 http = "^0.2.1"
-reqwest = { version="^0.10.8", features=["blocking", "json"] }
+reqwest = { version = "^0.10.8", features = ["blocking", "json"] }
 serde = "^1.0.117"
 serde_derive = "^1.0.117"
+serde_json = "^1.0.59"
+serde_yaml = "^0.8.14"
 roxmltree = "^0.13.0"
 libc = "^0.2.80"
-lazy_static = "^1.4.0"
-serde_yaml = "^0.8.14"
 csv = "^1.1.4"
+base64 = "^0.13.0"

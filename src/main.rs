@@ -17,25 +17,31 @@
 //! Runner for Decision Model and Notation™ Technology Compatibility Kit written in Rust.
 
 #[macro_use]
-extern crate serde_derive;
-#[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
+
+use std::any::Any;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::process::exit;
+use std::{fs, io};
+
+use csv::QuoteStyle;
+use http::Uri;
+use reqwest::blocking::Client;
+use serde_yaml::{from_str, Error};
 
 use crate::errors::RunnerError;
 use crate::model::{parse_from_file, TestCases};
 use crate::validator::validate_test_cases_file;
-use http::Uri;
-use reqwest::blocking::Client;
-use std::path::{Path, PathBuf};
-use std::process::exit;
-use std::{fs, io};
-use std::collections::BTreeMap;
-use serde_yaml::{from_str, Error};
-use std::any::Any;
-use csv::QuoteStyle;
 
+mod dto;
 mod errors;
 mod model;
+#[cfg(test)]
+mod tests;
 #[cfg_attr(target_os = "linux", path = "validator.rs")]
 #[cfg_attr(not(target_os = "linux"), path = "validator_non_linux.rs")]
 mod validator;

@@ -14,16 +14,13 @@
  *  limitations under the License.
  */
 
-//! Error definitions.
+//! Test case input files.
 
-#[derive(Debug, PartialEq)]
-pub enum RunnerError {
-  ReadingFileFailed(String),
-  ParsingXMLFailed(String),
-  ValidatingXMLFailed(i32),
-  XmlExpectedMandatoryNode(String),
-  XmlExpectedMandatoryTextContent(String),
-  XmlExpectedMandatoryAttribute(String),
-}
+mod dto;
+mod model;
 
-// TODO Implement Display trait to make error reporting more verbose and user friendly.
+const TC_0001: &str = include_str!("tc-0001.xml");
+const TC_0002: &str = include_str!("tc-0002.xml");
+const TC_0003: &str = include_str!("tc-0003.xml");
+
+const INPUTS_0001: &str = include_str!("inputs-0001.json");

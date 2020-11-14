@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-//! Test case model to be parsed from XML definition file.
+//! Model to be parsed from XML file containing definitions of test cases.
 
 use crate::errors::RunnerError;
 use crate::errors::RunnerError::*;
@@ -87,7 +87,9 @@ pub struct TestCase {
   pub description: Option<String>,
   /// Optional invocable name.
   pub invocable_name: Option<String>,
+  /// Collection of input nodes.
   pub input_nodes: Vec<InputNode>,
+  /// Collection of result nodes.
   pub result_nodes: Vec<ResultNode>,
 }
 
@@ -98,6 +100,17 @@ pub struct InputNode {
   pub name: String,
   /// Optional value of this [InputNode].
   pub value: Option<ValueType>,
+}
+
+/// Types of values.
+/// [ValueType] may be a single value,
+/// collection of components
+/// or a list.
+#[derive(Debug)]
+pub enum ValueType {
+  Simple(Value),
+  Components(Vec<Component>),
+  List(List),
 }
 
 /// Result node expected by test case.
@@ -114,9 +127,9 @@ pub struct ResultNode {
 /// Value representing single result of a test case.
 #[derive(Debug)]
 pub struct Value {
-  /// Type of the value in `xsi` namespace.
+  /// Type of the value in namespace-prefixed form.
   pub typ: Option<String>,
-  /// Optional text value.
+  /// Optional text representing the value.
   pub text: Option<String>,
   /// Flag indicating if this [Value] is nil, `xsi:nil="true"`.
   pub nil: bool,
@@ -127,37 +140,29 @@ pub struct Value {
 pub struct Component {
   /// Optional name of this component.
   pub name: Option<String>,
-  /// Optional value type contained in this [Component].
+  /// Optional value contained in this [Component].
   pub value: Option<ValueType>,
   /// Flag indicating if this [Component] is nil, `xsi:nil="true"`.
   pub nil: bool,
 }
 
-/// Value representing a list as a result of a test case.
+/// Value representing a list.
 #[derive(Debug)]
 pub struct List {
-  /// Collection of list items, may be empty.
+  /// Vector of list items (values), may be empty.
   pub items: Vec<ValueType>,
   /// Flag indicating if this [List] is nil, `xsi:nil="true"`.
   pub nil: bool,
 }
 
 impl Default for List {
+  /// [List] is empty and nil by default.
   fn default() -> Self {
     Self { items: vec![], nil: true }
   }
 }
 
-/// Types of values representing a result of a test case.
-#[derive(Debug)]
-pub enum ValueType {
-  Simple(Value),
-  Components(Vec<Component>),
-  List(List),
-}
-
-/// Reads the XML file containing test cases.
-/// This function reads the whole file into string and passes it to further processing.
+/// Parses the XML file containing test cases.
 pub fn parse_from_file(p: &Path) -> Result<TestCases, RunnerError> {
   match read_to_string(p) {
     Ok(content) => parse_from_string(&content),
@@ -165,8 +170,8 @@ pub fn parse_from_file(p: &Path) -> Result<TestCases, RunnerError> {
   }
 }
 
-/// Parses XML file containing test cases.
-fn parse_from_string(s: &str) -> Result<TestCases, RunnerError> {
+/// Parses the XML content from string.
+pub fn parse_from_string(s: &str) -> Result<TestCases, RunnerError> {
   match roxmltree::Document::parse(&s) {
     Ok(document) => {
       let test_cases_node = document.root_element();
@@ -380,115 +385,5 @@ fn optional_child_required_content(node: &Node, child_name: &str) -> Result<Opti
     Ok(required_content(&child_node).ok())
   } else {
     Ok(None)
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use crate::model::{parse_from_string, TestCaseType, ValueType};
-
-  #[test]
-  fn test_001() {
-    let input = include_str!("test-case-1.xml");
-    let test_cases = parse_from_string(input).unwrap();
-    assert_eq!("0001-input-data-string.dmn", test_cases.model_name.unwrap().as_str());
-    assert_eq!(4, test_cases.labels.len());
-    assert_eq!("Compliance Level 2", test_cases.labels[0].as_str());
-    assert_eq!("Literal Expression", test_cases.labels[1].as_str());
-    assert_eq!("FEEL Special-character Names", test_cases.labels[2].as_str());
-    assert_eq!("Data Type: String", test_cases.labels[3].as_str());
-    assert_eq!(1, test_cases.test_cases.len());
-    let test_case_1 = &test_cases.test_cases[0];
-    assert_eq!("001", test_case_1.id.as_ref().unwrap().as_str());
-    assert_eq!(None, test_case_1.name);
-    assert_eq!(TestCaseType::Decision, test_case_1.typ);
-    assert_eq!(None, test_case_1.invocable_name);
-    assert_eq!("Testing valid input", test_case_1.description.as_ref().unwrap().as_str());
-  }
-
-  #[test]
-  fn test_002() {
-    let input = include_str!("test-case-2.xml");
-    let test_cases = parse_from_string(input).unwrap();
-    assert_eq!("0008-LX-arithmetic.dmn", test_cases.model_name.unwrap().as_str());
-    assert_eq!(6, test_cases.labels.len());
-    assert_eq!("Compliance Level 2", test_cases.labels[0].as_str());
-    assert_eq!("Literal Expression", test_cases.labels[1].as_str());
-    assert_eq!("Item Definition", test_cases.labels[2].as_str());
-    assert_eq!("FEEL Arithmetic", test_cases.labels[3].as_str());
-    assert_eq!("Data Type: Number", test_cases.labels[4].as_str());
-    assert_eq!("Data Type: Structure", test_cases.labels[5].as_str());
-    assert_eq!(3, test_cases.test_cases.len());
-    let test_case_1 = &test_cases.test_cases[0];
-    assert_eq!("001", test_case_1.id.as_ref().unwrap().as_str());
-    assert_eq!(None, test_case_1.name);
-    assert_eq!(TestCaseType::Decision, test_case_1.typ);
-    assert_eq!(None, test_case_1.invocable_name);
-    assert_eq!(None, test_case_1.description);
-    assert_eq!(1, test_case_1.input_nodes.len());
-    let input_node_1 = &test_case_1.input_nodes[0];
-    match &input_node_1.value {
-      Some(ValueType::Components(components)) => {
-        assert_eq!(3, components.len());
-        let component_1 = &components[0];
-        assert_eq!("principal", component_1.name.as_ref().unwrap().as_str());
-        match &component_1.value {
-          Some(ValueType::Simple(v)) => {
-            assert_eq!("600000", v.text.as_ref().unwrap().as_str());
-            assert_eq!("xsd:decimal", v.typ.as_ref().unwrap().as_str());
-            assert_eq!(false, v.nil);
-          }
-          _ => assert!(false),
-        }
-        let component_2 = &components[1];
-        assert_eq!("rate", component_2.name.as_ref().unwrap().as_str());
-        match &component_2.value {
-          Some(ValueType::Simple(v)) => {
-            assert_eq!("0.0375", v.text.as_ref().unwrap().as_str());
-            assert_eq!("xsd:decimal", v.typ.as_ref().unwrap().as_str());
-            assert_eq!(false, v.nil);
-          }
-          _ => assert!(false),
-        }
-        let component_3 = &components[2];
-        assert_eq!("termMonths", component_3.name.as_ref().unwrap().as_str());
-        match &component_3.value {
-          Some(ValueType::Simple(v)) => {
-            assert_eq!("360", v.text.as_ref().unwrap().as_str());
-            assert_eq!("xsd:decimal", v.typ.as_ref().unwrap().as_str());
-            assert_eq!(false, v.nil);
-          }
-          _ => assert!(false),
-        }
-      }
-      _ => assert!(false),
-    };
-  }
-
-  #[test]
-  fn test_003() {
-    let input = include_str!("test-case-3.xml");
-    let test_cases = parse_from_string(input).unwrap();
-    assert_eq!("0012-list-functions.dmn", test_cases.model_name.unwrap().as_str());
-    assert_eq!(19, test_cases.test_cases.len());
-    let test_case_1 = &test_cases.test_cases[0];
-    assert_eq!("001", test_case_1.id.as_ref().unwrap().as_str());
-    let input_node_1 = &test_case_1.input_nodes[0];
-    match &input_node_1.value {
-      Some(ValueType::List(l)) => {
-        assert_eq!(3, l.items.len());
-        for (i, &text) in ["a", "b", "c"].iter().enumerate() {
-          match &l.items[i] {
-            ValueType::Simple(v) => {
-              assert_eq!(text, v.text.as_ref().unwrap().as_str());
-              assert_eq!("xsd:string", v.typ.as_ref().unwrap().as_str());
-              assert_eq!(false, v.nil);
-            }
-            _ => assert!(false),
-          }
-        }
-      }
-      _ => assert!(false),
-    }
   }
 }
