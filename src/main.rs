@@ -99,6 +99,7 @@ fn main() {
   usage();
 }
 
+/// TODO MPY: Try to parse the content of configuration yaml to struct.
 fn get_config() -> Option<String> {
   if let Ok(file_content) = fs::read_to_string("runner.yml") {
     let deserialized_map: Result<BTreeMap<String, String>, Error> = from_str(&file_content);
@@ -217,6 +218,11 @@ fn execute_tests(path: &PathBuf, client: &Client) -> Result<(), RunnerError> {
   Ok(())
 }
 
+/// TODO MPY: Now the writer is created every time the loop iterates.
+/// It would be more convenient to create the CSV writer once in `main` function
+/// and pass reference to it to processing functions.
+/// This change will make it easier to handle writing report to file.
+/// Writing to file should be buffered (buffered is faster).  
 fn display_report(path: &PathBuf, test_cases: &TestCases) {
   let mut wtr = csv::WriterBuilder::new()
     .delimiter(b',')
