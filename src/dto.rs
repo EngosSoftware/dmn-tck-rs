@@ -1,3 +1,21 @@
+/*
+ *  Copyright 2020 Dariusz Depta Engos Software
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
+//!
+
 use crate::model::{Component, InputNode, List, Value, ValueType};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,7 +66,7 @@ impl From<&ValueType> for ValueTypeDto {
         ..Default::default()
       },
       ValueType::Components(components) => Self {
-        components: Some(components.iter().map(|c| ComponentDto::from(c)).collect()),
+        components: Some(components.iter().map(ComponentDto::from).collect()),
         ..Default::default()
       },
       ValueType::List(list) => Self {
@@ -81,7 +99,7 @@ impl From<&Value> for ValueDto {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ComponentDto {
-  #[serde(rename = "type")]
+  #[serde(rename = "name")]
   pub name: Option<String>,
   #[serde(rename = "value")]
   pub value: Option<ValueTypeDto>,
@@ -113,7 +131,7 @@ pub struct ListDto {
 impl From<&List> for ListDto {
   fn from(list: &List) -> Self {
     Self {
-      items: list.items.iter().map(|i| ValueTypeDto::from(i)).collect(),
+      items: list.items.iter().map(ValueTypeDto::from).collect(),
       nil: list.nil,
     }
   }

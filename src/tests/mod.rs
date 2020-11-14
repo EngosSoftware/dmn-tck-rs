@@ -24,3 +24,5 @@ const TC_0002: &str = include_str!("tc-0002.xml");
 const TC_0003: &str = include_str!("tc-0003.xml");
 
 const INPUTS_0001: &str = include_str!("inputs-0001.json");
+const INPUTS_0002: &str = include_str!("inputs-0002.json");
+const INPUTS_0003: &str = include_str!("inputs-0003.json");

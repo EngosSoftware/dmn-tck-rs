@@ -1,10 +1,12 @@
-{
-  "name": "Full Name",
-  "value": {
-    "simple": {
-      "type": "xsd:string",
-      "text": "John Doe",
-      "isNil": false
+[
+  {
+    "name": "Full Name",
+    "value": {
+      "simple": {
+        "type": "xsd:string",
+        "text": "John Doe",
+        "isNil": false
+      }
     }
   }
-}
+]

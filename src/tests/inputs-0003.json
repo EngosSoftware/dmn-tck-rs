@@ -1,0 +1,64 @@
+[
+  {
+    "name": "list1",
+    "value": {
+      "list": {
+        "items": [
+          {
+            "simple": {
+              "type": "xsd:string",
+              "text": "a",
+              "isNil": false
+            }
+          },
+          {
+            "simple": {
+              "type": "xsd:string",
+              "text": "b",
+              "isNil": false
+            }
+          },
+          {
+            "simple": {
+              "type": "xsd:string",
+              "text": "c",
+              "isNil": false
+            }
+          }
+        ],
+        "isNil": false
+      }
+    }
+  },
+  {
+    "name": "list2",
+    "value": {
+      "list": {
+        "items": [
+          {
+            "simple": {
+              "type": "xsd:string",
+              "text": "x",
+              "isNil": false
+            }
+          },
+          {
+            "simple": {
+              "type": "xsd:string",
+              "text": "y",
+              "isNil": false
+            }
+          },
+          {
+            "simple": {
+              "type": "xsd:string",
+              "text": "z",
+              "isNil": false
+            }
+          }
+        ],
+        "isNil": false
+      }
+    }
+  }
+]

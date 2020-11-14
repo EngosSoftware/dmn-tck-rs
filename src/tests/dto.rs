@@ -17,13 +17,33 @@
 //! Test cases for DTOs.
 
 use crate::dto::InputNodeDto;
-use crate::model::parse_from_string;
-use crate::tests::{INPUTS_0001, TC_0001};
+use crate::model::{parse_from_string, InputNode};
+use crate::tests::*;
 
 #[test]
-fn test_input_nodes_value() {
+fn test_input_nodes_value_0001() {
   let test_cases = parse_from_string(TC_0001).unwrap();
   let test_case = &test_cases.test_cases[0];
-  let input_node_dto = InputNodeDto::from(&test_case.input_nodes[0]);
-  assert_eq!(INPUTS_0001, serde_json::to_string_pretty(&input_node_dto).unwrap().as_str());
+  let input_nodes: Vec<InputNodeDto> = test_case.input_nodes.iter().map(InputNodeDto::from).collect();
+  let actual = serde_json::to_string_pretty(&input_nodes).unwrap();
+  assert_eq!(INPUTS_0001, actual.as_str());
+}
+
+#[test]
+fn test_input_nodes_value_0002() {
+  let test_cases = parse_from_string(TC_0002).unwrap();
+  let test_case = &test_cases.test_cases[0];
+  let input_nodes: Vec<InputNodeDto> = test_case.input_nodes.iter().map(InputNodeDto::from).collect();
+  let actual = serde_json::to_string_pretty(&input_nodes).unwrap();
+  assert_eq!(INPUTS_0002, actual.as_str());
+}
+
+#[test]
+fn test_input_nodes_value_0003() {
+  let test_cases = parse_from_string(TC_0003).unwrap();
+  let test_case = &test_cases.test_cases[0];
+  let input_nodes: Vec<InputNodeDto> = test_case.input_nodes.iter().map(InputNodeDto::from).collect();
+  let actual = serde_json::to_string_pretty(&input_nodes).unwrap();
+  println!("{}", actual);
+  assert_eq!(INPUTS_0003, actual.as_str());
 }

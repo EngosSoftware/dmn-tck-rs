@@ -33,6 +33,7 @@ use http::Uri;
 use reqwest::blocking::Client;
 use serde_yaml::{from_str, Error};
 
+use crate::dto::InputNodeDto;
 use crate::errors::RunnerError;
 use crate::model::{parse_from_file, TestCases};
 use crate::validator::validate_test_cases_file;
@@ -78,6 +79,9 @@ pub struct EvaluateParams {
   /// Name of the artifact to be evaluated.
   #[serde(rename = "name")]
   name: String,
+  /// Input values.
+  #[serde(rename = "input")]
+  input: Vec<InputNodeDto>,
 }
 
 /// Main entrypoint of the runner.
@@ -192,8 +196,9 @@ fn execute_tests(path: &PathBuf, client: &Client) -> Result<(), RunnerError> {
   print!(",  Parsing...");
   let test_cases = parse_from_file(path)?;
   println!("OK");
+  let empty_id = String::new();
   for test_case in &test_cases.test_cases {
-    let id = test_case.id.as_ref().map_or("".to_string(), |a| a.clone());
+    let id = test_case.id.as_ref().unwrap_or(&empty_id);
     for result_node in &test_case.result_nodes {
       let name = result_node.name.clone();
       let artifact = match &result_node.typ {
@@ -204,7 +209,11 @@ fn execute_tests(path: &PathBuf, client: &Client) -> Result<(), RunnerError> {
         "\nEVALUATING: test case id: {:>6}, result node name: '{}', artifact: '{}'\n",
         id, name, artifact
       );
-      let params = EvaluateParams { artifact, name };
+      let params = EvaluateParams {
+        artifact,
+        name,
+        input: test_case.input_nodes.iter().map(InputNodeDto::from).collect(),
+      };
       match client.post(CONFIG_EVALUATE_URL).json(&params).send() {
         Ok(response) => {
           println!("RESPONSE: {:?}\n", response.text().unwrap());

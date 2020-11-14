@@ -1,0 +1,42 @@
+[
+  {
+    "name": "loan",
+    "value": {
+      "components": [
+        {
+          "name": "principal",
+          "value": {
+            "simple": {
+              "type": "xsd:decimal",
+              "text": "600000",
+              "isNil": false
+            }
+          },
+          "isNil": false
+        },
+        {
+          "name": "rate",
+          "value": {
+            "simple": {
+              "type": "xsd:decimal",
+              "text": "0.0375",
+              "isNil": false
+            }
+          },
+          "isNil": false
+        },
+        {
+          "name": "termMonths",
+          "value": {
+            "simple": {
+              "type": "xsd:decimal",
+              "text": "360",
+              "isNil": false
+            }
+          },
+          "isNil": false
+        }
+      ]
+    }
+  }
+]
