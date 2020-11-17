@@ -23,12 +23,11 @@ extern crate serde_derive;
 extern crate serde_json;
 
 use std::any::Any;
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use std::{fs, io};
+use std::fs;
 
-use csv::QuoteStyle;
+use csv::{QuoteStyle, Writer};
 use http::Uri;
 use reqwest::blocking::Client;
 use serde_yaml::{from_str, Error};
@@ -37,6 +36,8 @@ use crate::dto::InputNodeDto;
 use crate::errors::RunnerError;
 use crate::model::{parse_from_file, TestCases};
 use crate::validator::validate_test_cases_file;
+use std::borrow::BorrowMut;
+use std::fs::File;
 
 mod dto;
 mod errors;
@@ -47,17 +48,6 @@ mod tests;
 #[cfg_attr(not(target_os = "linux"), path = "validator_non_linux.rs")]
 mod validator;
 mod validator_non_linux;
-
-// URL of the endpoint for deploying decision models
-const CONFIG_DEPLOY_URL: &str = "http://0.0.0.0:12000/dpl";
-
-// URL of the endpoint for evaluating decision artifact
-const CONFIG_EVALUATE_URL: &str = "http://0.0.0.0:12000/evl";
-
-// Names of property in runner.yml file
-// const CONFIG_DEPLOY_URL_NAME: &str = "deploy_url";
-// const CONFIG_EVALUATE_URL_NAME: &str = "evaluate_url";
-const CONFIG_DIR_PATH_NAME: &str = "dir_path";
 
 /// Parameters for deploying definitions from *.dmn files.
 #[derive(Serialize)]
@@ -84,18 +74,31 @@ pub struct EvaluateParams {
   input: Vec<InputNodeDto>,
 }
 
+/// Runner configuration parameters.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ConfigurationParams {
+  /// Path to directory containing test cases.
+  dir_path: String,
+  /// URL to REST service where dmn definitions will be deployed.
+  deploy_url: String,
+  /// URL to REST service where dmn definitions will be evaluated.
+  evaluate_url: String,
+}
+
 /// Main entrypoint of the runner.
 fn main() {
   println!("Starting DMN TCK runner...");
-  if let Some(dir_name) = get_config() {
-    let dir_path = Path::new(&dir_name);
+  if let Some(config) = get_config() {
+    let dir_path = Path::new(&config.dir_path);
     println!("Searching DMN files in directory: {:?}", dir_path);
     if dir_path.exists() && dir_path.is_dir() {
       let client = reqwest::blocking::Client::new();
-      let count = process_dmn_files(dir_path, &client);
+      let count = process_dmn_files(dir_path, &client, &config.deploy_url);
       println!("\nProcessed {} *.dmn files.\n", count);
-      if let Ok(count) = process_xml_files(dir_path, &client) {
-        println!("\nProcessed {} *.xml files.\n", count);
+      if let Some(mut wtr) = get_writer() {
+        if let Ok(count) = process_xml_files(dir_path, &client, wtr.borrow_mut(), &config.evaluate_url) {
+          println!("\nProcessed {} *.xml files.\n", count);
+        }
       }
       return;
     }
@@ -103,14 +106,11 @@ fn main() {
   usage();
 }
 
-/// TODO MPY: Try to parse the content of configuration yaml to struct.
-fn get_config() -> Option<String> {
+fn get_config() -> Option<ConfigurationParams> {
   if let Ok(file_content) = fs::read_to_string("runner.yml") {
-    let deserialized_map: Result<BTreeMap<String, String>, Error> = from_str(&file_content);
-    if let Ok(map) = deserialized_map {
-      if let Some(dir_path) = map.get(CONFIG_DIR_PATH_NAME) {
-        return Some(dir_path.clone());
-      }
+    let config_result: Result<ConfigurationParams, Error> = from_str(&file_content);
+    if let Ok(config) = config_result {
+      return Some(config);
     } else {
       println!("Cannot read runner.yml")
     }
@@ -120,17 +120,17 @@ fn get_config() -> Option<String> {
   None
 }
 
-fn process_dmn_files(path: &Path, client: &Client) -> u64 {
+fn process_dmn_files(path: &Path, client: &Client, deploy_url: &str) -> u64 {
   let mut count = 0;
   if let Ok(entries) = fs::read_dir(path) {
     for entry in entries {
       if let Ok(dir_entry) = entry {
         let path = dir_entry.path();
         if path.is_dir() {
-          count += process_dmn_files(&path, client);
+          count += process_dmn_files(&path, client, deploy_url);
         } else if let Some(ext) = path.extension() {
           if ext == "dmn" {
-            deploy_dmn_definitions(&path, client);
+            deploy_dmn_definitions(&path, client, deploy_url);
             count += 1;
           }
         }
@@ -140,7 +140,7 @@ fn process_dmn_files(path: &Path, client: &Client) -> u64 {
   count
 }
 
-fn deploy_dmn_definitions(path: &PathBuf, client: &Client) {
+fn deploy_dmn_definitions(path: &PathBuf, client: &Client, deploy_url: &str) {
   if let Ok(canonical) = fs::canonicalize(path) {
     if let Some(p_and_q) = canonical.to_str() {
       if let Ok(file_href) = Uri::builder().scheme("file").authority("localhost").path_and_query(p_and_q).build() {
@@ -150,7 +150,7 @@ fn deploy_dmn_definitions(path: &PathBuf, client: &Client) {
             file: file_href.to_string(),
             content: base64::encode(content),
           };
-          match client.post(CONFIG_DEPLOY_URL).json(&params).send() {
+          match client.post(deploy_url).json(&params).send() {
             Ok(response) => match response.text() {
               Ok(text) => {
                 println!("{}\n", text);
@@ -168,17 +168,17 @@ fn deploy_dmn_definitions(path: &PathBuf, client: &Client) {
   }
 }
 
-fn process_xml_files(path: &Path, client: &Client) -> Result<u64, RunnerError> {
+fn process_xml_files(path: &Path, client: &Client, wtr: &mut Writer<File>, evaluate_url: &str) -> Result<u64, RunnerError> {
   let mut count = 0;
   if let Ok(entries) = fs::read_dir(path) {
     for entry in entries {
       if let Ok(dir_entry) = entry {
         let path = dir_entry.path();
         if path.is_dir() {
-          count += process_xml_files(&path, client)?;
+          count += process_xml_files(&path, client, wtr, evaluate_url)?;
         } else if let Some(ext) = path.extension() {
           if ext == "xml" {
-            execute_tests(&path, client)?;
+            execute_tests(&path, client, wtr, evaluate_url)?;
             count += 1;
           }
         }
@@ -188,7 +188,7 @@ fn process_xml_files(path: &Path, client: &Client) -> Result<u64, RunnerError> {
   Ok(count)
 }
 
-fn execute_tests(path: &PathBuf, client: &Client) -> Result<(), RunnerError> {
+fn execute_tests(path: &PathBuf, client: &Client, wtr: &mut Writer<File>, evaluate_url: &str) -> Result<(), RunnerError> {
   println!("\nProcessing file: {}", path.display());
   print!("Validating...");
   validate_test_cases_file(&path)?;
@@ -214,7 +214,7 @@ fn execute_tests(path: &PathBuf, client: &Client) -> Result<(), RunnerError> {
         name,
         input: test_case.input_nodes.iter().map(InputNodeDto::from).collect(),
       };
-      match client.post(CONFIG_EVALUATE_URL).json(&params).send() {
+      match client.post(evaluate_url).json(&params).send() {
         Ok(response) => {
           println!("RESPONSE: {:?}\n", response.text().unwrap());
         }
@@ -223,23 +223,11 @@ fn execute_tests(path: &PathBuf, client: &Client) -> Result<(), RunnerError> {
       println!("OK");
     }
   }
-  display_report(&path, &test_cases);
+  display_report(&path, &test_cases, wtr);
   Ok(())
 }
 
-/// TODO MPY: Now the writer is created every time the loop iterates.
-/// It would be more convenient to create the CSV writer once in `main` function
-/// and pass reference to it to processing functions.
-/// This change will make it easier to handle writing report to file.
-/// Writing to file should be buffered (buffered is faster).  
-fn display_report(path: &PathBuf, test_cases: &TestCases) {
-  let mut wtr = csv::WriterBuilder::new()
-    .delimiter(b',')
-    .quote_style(QuoteStyle::Always)
-    .double_quote(true)
-    .from_writer(io::stdout());
-
-  wtr.write_record(&["Directory name", "File name", "Test id", "Test result", "Remarks"]);
+fn display_report(path: &PathBuf, test_cases: &TestCases, wtr: &mut Writer<File>) {
   for test_case in &test_cases.test_cases {
     let mut file_name = "";
     if let Some(path_os) = path.file_stem() {
@@ -272,9 +260,26 @@ fn display_report(path: &PathBuf, test_cases: &TestCases) {
         }
       }
     }
-    wtr.write_record(&[dir_name, file_name, test_id, test_result, ""]);
+    wtr.write_record(&[dir_name, file_name, test_id, test_result, ""]).expect("Cannot write to report");
+    wtr.flush().expect("Cannot write to report");
   }
   // println!("{:?}", test_cases)
+}
+
+fn get_writer() -> Option<Writer<File>> {
+  let wtr_result = csv::WriterBuilder::new()
+    .delimiter(b',')
+    .quote_style(QuoteStyle::Always)
+    .double_quote(true)
+    .from_path("report.csv");
+  if let Ok(mut wtr) = wtr_result {
+    wtr.write_record(&["Directory name", "File name", "Test id", "Test result", "Remarks"]).expect("Cannot write to report");
+    wtr.flush().expect("Cannot write to report");
+
+    return Some(wtr);
+  }
+
+  None
 }
 
 fn usage() {
