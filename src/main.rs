@@ -78,28 +78,30 @@ pub struct EvaluateParams {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigurationParams {
   /// Path to directory containing test cases.
-  dir_path: String,
+  test_cases_dir_path: String,
   /// URL to REST service where dmn definitions will be deployed.
   deploy_url: String,
   /// URL to REST service where dmn definitions will be evaluated.
   evaluate_url: String,
+  /// Path to write csv report file.
+  report_file_path: String,
 }
 
 /// Main entrypoint of the runner.
 fn main() {
   println!("Starting DMN TCK runner...");
   if let Some(config) = get_config() {
-    let dir_path = Path::new(&config.dir_path);
+    let dir_path = Path::new(&config.test_cases_dir_path);
     println!("Searching DMN files in directory: {:?}", dir_path);
     if dir_path.exists() && dir_path.is_dir() {
       let client = reqwest::blocking::Client::new();
       let count = process_dmn_files(dir_path, &client, &config.deploy_url);
       println!("\nProcessed {} *.dmn files.\n", count);
-      if let Some(mut wtr) = get_writer() {
-        if let Ok(count) = process_xml_files(dir_path, &client, wtr.borrow_mut(), &config.evaluate_url) {
-          println!("\nProcessed {} *.xml files.\n", count);
-        }
+      let mut wtr_buf = get_writer();
+      if let Ok(count) = process_xml_files(dir_path, &client, wtr_buf.borrow_mut(), &config.evaluate_url) {
+        println!("\nProcessed {} *.xml files.\n", count);
       }
+      write_report_to_file(wtr_buf, &config.report_file_path);
       return;
     }
   }
@@ -168,7 +170,7 @@ fn deploy_dmn_definitions(path: &PathBuf, client: &Client, deploy_url: &str) {
   }
 }
 
-fn process_xml_files(path: &Path, client: &Client, wtr: &mut Writer<File>, evaluate_url: &str) -> Result<u64, RunnerError> {
+fn process_xml_files(path: &Path, client: &Client, wtr: &mut Writer<Vec<u8>>, evaluate_url: &str) -> Result<u64, RunnerError> {
   let mut count = 0;
   if let Ok(entries) = fs::read_dir(path) {
     for entry in entries {
@@ -188,7 +190,7 @@ fn process_xml_files(path: &Path, client: &Client, wtr: &mut Writer<File>, evalu
   Ok(count)
 }
 
-fn execute_tests(path: &PathBuf, client: &Client, wtr: &mut Writer<File>, evaluate_url: &str) -> Result<(), RunnerError> {
+fn execute_tests(path: &PathBuf, client: &Client, wtr: &mut Writer<Vec<u8>>, evaluate_url: &str) -> Result<(), RunnerError> {
   println!("\nProcessing file: {}", path.display());
   print!("Validating...");
   validate_test_cases_file(&path)?;
@@ -223,11 +225,11 @@ fn execute_tests(path: &PathBuf, client: &Client, wtr: &mut Writer<File>, evalua
       println!("OK");
     }
   }
-  display_report(&path, &test_cases, wtr);
+  write_report(&path, &test_cases, wtr);
   Ok(())
 }
 
-fn display_report(path: &PathBuf, test_cases: &TestCases, wtr: &mut Writer<File>) {
+fn write_report(path: &PathBuf, test_cases: &TestCases, wtr: &mut Writer<Vec<u8>>) {
   for test_case in &test_cases.test_cases {
     let mut file_name = "";
     if let Some(path_os) = path.file_stem() {
@@ -260,26 +262,32 @@ fn display_report(path: &PathBuf, test_cases: &TestCases, wtr: &mut Writer<File>
         }
       }
     }
-    wtr.write_record(&[dir_name, file_name, test_id, test_result, ""]).expect("Cannot write to report");
-    wtr.flush().expect("Cannot write to report");
+    wtr.write_record(&[dir_name, file_name, test_id, test_result, ""]).expect("Cannot write to report.");
   }
   // println!("{:?}", test_cases)
 }
 
-fn get_writer() -> Option<Writer<File>> {
-  let wtr_result = csv::WriterBuilder::new()
+fn get_writer() -> Writer<Vec<u8>> {
+  let mut wtr_result = csv::WriterBuilder::new()
     .delimiter(b',')
     .quote_style(QuoteStyle::Always)
     .double_quote(true)
-    .from_path("report.csv");
-  if let Ok(mut wtr) = wtr_result {
-    wtr.write_record(&["Directory name", "File name", "Test id", "Test result", "Remarks"]).expect("Cannot write to report");
-    wtr.flush().expect("Cannot write to report");
+    .from_writer(vec![]);
 
-    return Some(wtr);
+  wtr_result.write_record(&["Directory name", "File name", "Test id", "Test result", "Remarks"]).expect("Cannot write to report.");
+  wtr_result
+}
+
+fn write_report_to_file(wrt_buf: Writer<Vec<u8>>, file_path: &str) {
+  let wrt_to_file_result = csv::WriterBuilder::new()
+    .quote_style(QuoteStyle::Never)
+    .from_path(file_path);
+
+  if let Ok(mut wrt_to_file) = wrt_to_file_result {
+    wrt_to_file.write_record(wrt_buf.into_inner()).expect("Cannot write report to file.")
+  } else if let Some(err) =  wrt_to_file_result.err() {
+    println!("ERROR: Cannot write report - {}", err);
   }
-
-  None
 }
 
 fn usage() {
