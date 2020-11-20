@@ -15,7 +15,7 @@
  */
 
 //! Runner for Decision Model and Notation™ Technology Compatibility Kit written in Rust.
-
+#![feature(array_map)]
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -27,17 +27,17 @@ use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::fs;
 
-use csv::{QuoteStyle, Writer};
 use http::Uri;
 use reqwest::blocking::Client;
 use serde_yaml::{from_str, Error};
 
 use crate::dto::InputNodeDto;
 use crate::errors::RunnerError;
-use crate::model::{parse_from_file, TestCases};
+use crate::model::{parse_from_file, TestCase};
 use crate::validator::validate_test_cases_file;
 use std::borrow::BorrowMut;
 use std::fs::File;
+use std::io::{BufWriter, Write};
 
 mod dto;
 mod errors;
@@ -97,11 +97,12 @@ fn main() {
       let client = reqwest::blocking::Client::new();
       let count = process_dmn_files(dir_path, &client, &config.deploy_url);
       println!("\nProcessed {} *.dmn files.\n", count);
-      let mut wtr_buf = get_writer();
-      if let Ok(count) = process_xml_files(dir_path, &client, wtr_buf.borrow_mut(), &config.evaluate_url) {
-        println!("\nProcessed {} *.xml files.\n", count);
+      if let Ok(mut wtr_buf) = get_writer() {
+        if let Ok(count) = process_xml_files(dir_path, &client, wtr_buf.borrow_mut(), &config.evaluate_url) {
+          println!("\nProcessed {} *.xml files.\n", count);
+        }
+        wtr_buf.flush().expect("Cannot save file.");
       }
-      write_report_to_file(wtr_buf, &config.report_file_path);
       return;
     }
   }
@@ -114,7 +115,7 @@ fn get_config() -> Option<ConfigurationParams> {
     if let Ok(config) = config_result {
       return Some(config);
     } else {
-      println!("Cannot read runner.yml")
+      println!("Cannot read runner.yml - {}", config_result.err()?)
     }
   } else {
     println!("Cannot find runner.yml")
@@ -170,7 +171,7 @@ fn deploy_dmn_definitions(path: &PathBuf, client: &Client, deploy_url: &str) {
   }
 }
 
-fn process_xml_files(path: &Path, client: &Client, wtr: &mut Writer<Vec<u8>>, evaluate_url: &str) -> Result<u64, RunnerError> {
+fn process_xml_files(path: &Path, client: &Client, wtr: &mut BufWriter<File>, evaluate_url: &str) -> Result<u64, RunnerError> {
   let mut count = 0;
   if let Ok(entries) = fs::read_dir(path) {
     for entry in entries {
@@ -190,7 +191,7 @@ fn process_xml_files(path: &Path, client: &Client, wtr: &mut Writer<Vec<u8>>, ev
   Ok(count)
 }
 
-fn execute_tests(path: &PathBuf, client: &Client, wtr: &mut Writer<Vec<u8>>, evaluate_url: &str) -> Result<(), RunnerError> {
+fn execute_tests(path: &PathBuf, client: &Client, wtr: &mut BufWriter<File>, evaluate_url: &str) -> Result<(), RunnerError> {
   println!("\nProcessing file: {}", path.display());
   print!("Validating...");
   validate_test_cases_file(&path)?;
@@ -224,13 +225,12 @@ fn execute_tests(path: &PathBuf, client: &Client, wtr: &mut Writer<Vec<u8>>, eva
       }
       println!("OK");
     }
+    write_report(&path, &test_case, wtr);
   }
-  write_report(&path, &test_cases, wtr);
   Ok(())
 }
 
-fn write_report(path: &PathBuf, test_cases: &TestCases, wtr: &mut Writer<Vec<u8>>) {
-  for test_case in &test_cases.test_cases {
+fn write_report(path: &PathBuf, test_case: &TestCase, wtr: &mut BufWriter<File>) {
     let mut file_name = "";
     if let Some(path_os) = path.file_stem() {
       if let Some(path_str) = path_os.to_str() {
@@ -262,32 +262,17 @@ fn write_report(path: &PathBuf, test_cases: &TestCases, wtr: &mut Writer<Vec<u8>
         }
       }
     }
-    wtr.write_record(&[dir_name, file_name, test_id, test_result, ""]).expect("Cannot write to report.");
-  }
+    wtr.write_all(prepare_report_line(&[dir_name, file_name, test_id, test_result, ""]).as_bytes()).expect("Cannot write to report.");
   // println!("{:?}", test_cases)
 }
 
-fn get_writer() -> Writer<Vec<u8>> {
-  let mut wtr_result = csv::WriterBuilder::new()
-    .delimiter(b',')
-    .quote_style(QuoteStyle::Always)
-    .double_quote(true)
-    .from_writer(vec![]);
-
-  wtr_result.write_record(&["Directory name", "File name", "Test id", "Test result", "Remarks"]).expect("Cannot write to report.");
-  wtr_result
+fn get_writer() -> Result<BufWriter<File>, std::io::Error> {
+  let file = File::create("report.csv")?;
+  Ok(BufWriter::new(file))
 }
 
-fn write_report_to_file(wrt_buf: Writer<Vec<u8>>, file_path: &str) {
-  let wrt_to_file_result = csv::WriterBuilder::new()
-    .quote_style(QuoteStyle::Never)
-    .from_path(file_path);
-
-  if let Ok(mut wrt_to_file) = wrt_to_file_result {
-    wrt_to_file.write_record(wrt_buf.into_inner()).expect("Cannot write report to file.")
-  } else if let Some(err) =  wrt_to_file_result.err() {
-    println!("ERROR: Cannot write report - {}", err);
-  }
+fn prepare_report_line(values: &[&str; 5]) -> String {
+  format!("{}\n",values.map(|val| format!("\"{}\"",val)).join(","))
 }
 
 fn usage() {
