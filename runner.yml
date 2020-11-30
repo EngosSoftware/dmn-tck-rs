@@ -1,3 +1,4 @@
-dir_path: ./dmn-tck-dev/TestCases
+test_cases_dir_path: ./dmn-tck/TestCases
 deploy_url: http://0.0.0.0:12000/dpl
 evaluate_url: http://0.0.0.0:12000/evl
+report_file_path: report.csv
