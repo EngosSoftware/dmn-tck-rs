@@ -153,7 +153,7 @@ fn deploy_dmn_definitions(path: &PathBuf, client: &Client) {
           match client.post(CONFIG_DEPLOY_URL).json(&params).send() {
             Ok(response) => match response.text() {
               Ok(text) => {
-                println!("{}\n", text);
+                println!("{}", text);
                 if text.contains("errors") {
                   exit(0);
                 }
@@ -189,7 +189,7 @@ fn process_xml_files(path: &Path, client: &Client) -> Result<u64, RunnerError> {
 }
 
 fn execute_tests(path: &PathBuf, client: &Client) -> Result<(), RunnerError> {
-  println!("\nProcessing file: {}", path.display());
+  println!("\n\nProcessing file: {}", path.display());
   print!("Validating...");
   validate_test_cases_file(&path)?;
   print!("OK");
@@ -205,10 +205,10 @@ fn execute_tests(path: &PathBuf, client: &Client) -> Result<(), RunnerError> {
         Some(t) => t.clone(),
         _ => format!("{}", test_case.typ),
       };
-      print!(
-        "\nEVALUATING: test case id: {:>6}, result node name: '{}', artifact: '{}'\n",
-        id, name, artifact
-      );
+      println!("\nEvaluating test case:");
+      println!("    id: {}", id);
+      println!("  name: {}", name);
+      println!("  type: {}", artifact);
       let params = EvaluateParams {
         artifact,
         name,
@@ -216,14 +216,14 @@ fn execute_tests(path: &PathBuf, client: &Client) -> Result<(), RunnerError> {
       };
       match client.post(CONFIG_EVALUATE_URL).json(&params).send() {
         Ok(response) => {
-          println!("RESPONSE: {:?}\n", response.text().unwrap());
+          println!("Response:");
+          println!("{}", response.text().unwrap());
         }
         Err(reason) => println!("ERROR: {:?}", reason),
       }
-      println!("OK");
     }
   }
-  display_report(&path, &test_cases);
+  // display_report(&path, &test_cases);
   Ok(())
 }
 
