@@ -35,6 +35,7 @@ use crate::dto::InputNodeDto;
 use crate::errors::RunnerError;
 use crate::model::{parse_from_file, TestCase};
 use crate::validator::validate_test_cases_file;
+use serde_json::to_writer_pretty;
 use std::borrow::BorrowMut;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -97,13 +98,11 @@ fn main() {
       let client = reqwest::blocking::Client::new();
       let count = process_dmn_files(dir_path, &client, &config.deploy_url);
       println!("\nProcessed {} *.dmn files.\n", count);
-      if let Ok(mut wtr_buf) = get_writer() {
-        if let Ok(count) = process_xml_files(dir_path, &client, wtr_buf.borrow_mut(), &config.evaluate_url) {
-          println!("\nProcessed {} *.xml files.\n", count);
-        }
-        wtr_buf.flush().expect("Cannot save file.");
+      let mut writer = get_writer();
+      if let Ok(count) = process_xml_files(&mut writer, dir_path, &client, &config.evaluate_url) {
+        println!("\nProcessed {} *.xml files.\n", count);
       }
-      return;
+      writer.flush().expect("flushing report should have worked");
     }
   }
   usage();
@@ -146,7 +145,12 @@ fn process_dmn_files(path: &Path, client: &Client, deploy_url: &str) -> u64 {
 fn deploy_dmn_definitions(path: &PathBuf, client: &Client, deploy_url: &str) {
   if let Ok(canonical) = fs::canonicalize(path) {
     if let Some(p_and_q) = canonical.to_str() {
-      if let Ok(file_href) = Uri::builder().scheme("file").authority("localhost").path_and_query(p_and_q).build() {
+      if let Ok(file_href) = Uri::builder()
+        .scheme("file")
+        .authority("localhost")
+        .path_and_query(p_and_q)
+        .build()
+      {
         println!("Deploying: {}", file_href);
         if let Ok(content) = fs::read_to_string(canonical) {
           let params = DeployParams {
@@ -171,17 +175,22 @@ fn deploy_dmn_definitions(path: &PathBuf, client: &Client, deploy_url: &str) {
   }
 }
 
-fn process_xml_files(path: &Path, client: &Client, wtr: &mut BufWriter<File>, evaluate_url: &str) -> Result<u64, RunnerError> {
+fn process_xml_files(
+  writer: &mut BufWriter<File>,
+  path: &Path,
+  client: &Client,
+  evaluate_url: &str,
+) -> Result<u64, RunnerError> {
   let mut count = 0;
   if let Ok(entries) = fs::read_dir(path) {
     for entry in entries {
       if let Ok(dir_entry) = entry {
         let path = dir_entry.path();
         if path.is_dir() {
-          count += process_xml_files(&path, client, wtr, evaluate_url)?;
+          count += process_xml_files(writer, &path, client, evaluate_url)?;
         } else if let Some(ext) = path.extension() {
           if ext == "xml" {
-            execute_tests(&path, client, wtr, evaluate_url)?;
+            execute_tests(writer, &path, client, evaluate_url)?;
             count += 1;
           }
         }
@@ -191,7 +200,12 @@ fn process_xml_files(path: &Path, client: &Client, wtr: &mut BufWriter<File>, ev
   Ok(count)
 }
 
-fn execute_tests(path: &PathBuf, client: &Client, wtr: &mut BufWriter<File>, evaluate_url: &str) -> Result<(), RunnerError> {
+fn execute_tests(
+  writer: &mut BufWriter<File>,
+  path: &Path,
+  client: &Client,
+  evaluate_url: &str,
+) -> Result<(), RunnerError> {
   println!("\nProcessing file: {}", path.display());
   print!("Validating...");
   validate_test_cases_file(&path)?;
@@ -201,7 +215,7 @@ fn execute_tests(path: &PathBuf, client: &Client, wtr: &mut BufWriter<File>, eva
   println!("OK");
   let empty_id = String::new();
   for test_case in &test_cases.test_cases {
-    let id = test_case.id.as_ref().unwrap_or(&empty_id);
+    let test_id = test_case.id.as_ref().unwrap_or(&empty_id);
     for result_node in &test_case.result_nodes {
       let name = result_node.name.clone();
       let artifact = match &result_node.typ {
@@ -210,7 +224,7 @@ fn execute_tests(path: &PathBuf, client: &Client, wtr: &mut BufWriter<File>, eva
       };
       print!(
         "\nEVALUATING: test case id: {:>6}, result node name: '{}', artifact: '{}'\n",
-        id, name, artifact
+        test_id, name, artifact
       );
       let params = EvaluateParams {
         artifact,
@@ -219,62 +233,46 @@ fn execute_tests(path: &PathBuf, client: &Client, wtr: &mut BufWriter<File>, eva
       };
       match client.post(evaluate_url).json(&params).send() {
         Ok(response) => {
-          println!("RESPONSE: {:?}\n", response.text().unwrap());
+          let text = response.text().unwrap().replace("\"", "'");
+          if text.contains("errors") {
+            write_line(writer, &path, &test_id, "FAILURE", &text);
+          } else {
+            write_line(writer, &path, &test_id, "SUCCESS", &text);
+          }
+          println!("{}", text);
         }
-        Err(reason) => println!("ERROR: {:?}", reason),
+        Err(reason) => {
+          write_line(writer, &path, &test_id, "FAILURE", &reason.to_string());
+          eprintln!("ERROR: {}", reason.to_string())
+        }
       }
-      println!("OK");
     }
-    write_report(&path, &test_case, wtr);
   }
   Ok(())
 }
 
-fn write_report(path: &PathBuf, test_case: &TestCase, wtr: &mut BufWriter<File>) {
-  let mut file_name = "";
-  if let Some(path_os) = path.file_stem() {
-    if let Some(path_str) = path_os.to_str() {
-      file_name = path_str;
-    }
-  }
-
-  let mut dir_name = "";
-  if let Some(dir_str) = path.parent() {
-    if let Some(dir) = dir_str.to_str() {
-      dir_name = dir;
-    }
-  }
-
-  let mut test_id = "";
-  if let Some(id_ref) = test_case.id.as_ref() {
-    test_id = id_ref.as_str();
-  }
-
-  let mut test_result = "IGNORED";
-  for result in &test_case.result_nodes {
-    if result.error_result {
-      test_result = "FAILURE"
-    } else if let Some(expected) = &result.expected {
-      if let Some(computed) = &result.computed {
-        if expected.type_id() == computed.type_id() {
-          test_result = "SUCCESS"
-        }
-      }
-    }
-  }
-  wtr
-    .write_all(prepare_report_line(&[dir_name, file_name, test_id, test_result, ""]).as_bytes())
-    .expect("Cannot write to report.");
-  // println!("{:?}", test_cases)
+fn write_line(writer: &mut BufWriter<File>, path: &Path, test_id: &str, test_result: &str, remarks: &str) {
+  let dir_name = path
+    .parent()
+    .expect("taking parent path should work")
+    .to_str()
+    .expect("converting parent path to string should work");
+  let file_name = path
+    .file_stem()
+    .expect("taking file stem should work")
+    .to_str()
+    .expect("converting file stem to string should work");
+  writeln!(
+    writer,
+    r#""{}","{}","{}","{}","{}""#,
+    dir_name, file_name, test_id, test_result, remarks
+  )
+  .expect("writing should have worked");
 }
 
-fn get_writer() -> Result<BufWriter<File>, std::io::Error> {
-  let file = File::create("report.csv")?;
-  Ok(BufWriter::new(file))
-}
-
-fn prepare_report_line(values: &[&str; 5]) -> String {
-  format!("{}\n", values.map(|val| format!("\"{}\"", val)).join(","))
+fn get_writer() -> BufWriter<File> {
+  let file = File::create("report.csv").expect("creating report file should have worked");
+  BufWriter::new(file)
 }
 
 fn usage() {
