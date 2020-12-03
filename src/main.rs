@@ -22,7 +22,6 @@ extern crate lazy_static;
 extern crate serde_derive;
 extern crate serde_json;
 
-use std::any::Any;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::exit;
@@ -33,10 +32,8 @@ use serde_yaml::{from_str, Error};
 
 use crate::dto::InputNodeDto;
 use crate::errors::RunnerError;
-use crate::model::{parse_from_file, TestCase};
+use crate::model::parse_from_file;
 use crate::validator::validate_test_cases_file;
-use serde_json::to_writer_pretty;
-use std::borrow::BorrowMut;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
@@ -45,10 +42,7 @@ mod errors;
 mod model;
 #[cfg(test)]
 mod tests;
-#[cfg_attr(target_os = "linux", path = "validator.rs")]
-#[cfg_attr(not(target_os = "linux"), path = "validator_non_linux.rs")]
 mod validator;
-mod validator_non_linux;
 
 /// Parameters for deploying definitions from *.dmn files.
 #[derive(Serialize)]
@@ -102,7 +96,7 @@ fn main() {
       if let Ok(count) = process_xml_files(&mut writer, dir_path, &client, &config.evaluate_url) {
         println!("\nProcessed {} *.xml files.\n", count);
       }
-      writer.flush().expect("flushing report should have worked");
+      writer.flush().expect("flushing output file should not fail");
     }
   }
   usage();
@@ -223,7 +217,7 @@ fn execute_tests(
         _ => format!("{}", test_case.typ),
       };
       print!(
-        "\nEVALUATING: test case id: {:>6}, result node name: '{}', artifact: '{}'\n",
+        "\nEVALUATING: test case id: {}, result node name: '{}', artifact: '{}'\n",
         test_id, name, artifact
       );
       let params = EvaluateParams {
@@ -233,13 +227,14 @@ fn execute_tests(
       };
       match client.post(evaluate_url).json(&params).send() {
         Ok(response) => {
-          let text = response.text().unwrap().replace("\"", "'");
-          if text.contains("errors") {
-            write_line(writer, &path, &test_id, "FAILURE", &text);
+          let response_text = response.text().unwrap();
+          println!("{}", response_text);
+          let remarks = response_text.replace("\"", "`");
+          if response_text.contains("errors") {
+            write_line(writer, &path, &test_id, "FAILURE", &remarks);
           } else {
-            write_line(writer, &path, &test_id, "SUCCESS", &text);
+            write_line(writer, &path, &test_id, "SUCCESS", &remarks);
           }
-          println!("{}", text);
         }
         Err(reason) => {
           write_line(writer, &path, &test_id, "FAILURE", &reason.to_string());

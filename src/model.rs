@@ -158,7 +158,10 @@ pub struct List {
 impl Default for List {
   /// [List] is empty and nil by default.
   fn default() -> Self {
-    Self { items: vec![], nil: true }
+    Self {
+      items: vec![],
+      nil: true,
+    }
   }
 }
 
@@ -188,7 +191,7 @@ pub fn parse_from_string(s: &str) -> Result<TestCases, RunnerError> {
 /// Parses `testCases` node being the root element of the document.
 fn parse_root_node(node: &Node) -> Result<TestCases, RunnerError> {
   Ok(TestCases {
-    model_name: optional_child_required_content(node, NODE_MODEL_NAME)?,
+    model_name: optional_child_required_content(node, NODE_MODEL_NAME),
     labels: parse_labels(node)?,
     test_cases: parse_test_cases(node)?,
   })
@@ -213,7 +216,7 @@ fn parse_test_cases(node: &Node) -> Result<Vec<TestCase>, RunnerError> {
       id: optional_attribute(test_case_node, ATTR_ID),
       name: optional_attribute(test_case_node, ATTR_NAME),
       typ: parse_test_case_type(test_case_node),
-      description: optional_child_required_content(test_case_node, NODE_DESCRIPTION)?,
+      description: optional_child_required_content(test_case_node, NODE_DESCRIPTION),
       invocable_name: optional_attribute(test_case_node, ATTR_INVOCABLE_NAME),
       input_nodes: parse_input_nodes(test_case_node)?,
       result_nodes: parse_result_nodes(test_case_node)?,
@@ -237,7 +240,7 @@ fn parse_input_nodes(node: &Node) -> Result<Vec<InputNode>, RunnerError> {
   for ref input_node in node.children().filter(|n| n.tag_name().name() == NODE_INPUT_NODE) {
     items.push(InputNode {
       name: required_attribute(input_node, ATTR_NAME)?,
-      value: parse_value_type(input_node)?,
+      value: parse_value_type(input_node),
     })
   }
   Ok(items)
@@ -252,81 +255,81 @@ fn parse_result_nodes(node: &Node) -> Result<Vec<ResultNode>, RunnerError> {
       error_result: optional_attribute(result_node, ATTR_ERROR_RESULT).map_or(false, |v| v == "true"),
       typ: optional_attribute(result_node, ATTR_TYPE),
       cast: optional_attribute(result_node, ATTR_CAST),
-      expected: parse_child_value_type(result_node, NODE_EXPECTED)?,
-      computed: parse_child_value_type(result_node, NODE_COMPUTED)?,
+      expected: parse_child_value_type(result_node, NODE_EXPECTED),
+      computed: parse_child_value_type(result_node, NODE_COMPUTED),
     })
   }
   Ok(items)
 }
 
 /// Parses value type.
-fn parse_value_type(node: &Node) -> Result<Option<ValueType>, RunnerError> {
-  if let Ok(Some(v)) = parse_simple_value(node) {
-    return Ok(Some(ValueType::Simple(v)));
+fn parse_value_type(node: &Node) -> Option<ValueType> {
+  if let Some(v) = parse_simple_value(node) {
+    return Some(ValueType::Simple(v));
   }
-  if let Ok(Some(c)) = parse_value_components(node) {
-    return Ok(Some(ValueType::Components(c)));
+  if let Some(c) = parse_value_components(node) {
+    return Some(ValueType::Components(c));
   }
-  if let Ok(Some(l)) = parse_value_list(node) {
-    return Ok(Some(ValueType::List(l)));
+  if let Some(l) = parse_value_list(node) {
+    return Some(ValueType::List(l));
   }
-  Ok(None)
+  None
 }
 
 /// Parses value type from child node.
-fn parse_child_value_type(node: &Node, child_name: &str) -> Result<Option<ValueType>, RunnerError> {
+fn parse_child_value_type(node: &Node, child_name: &str) -> Option<ValueType> {
   if let Some(ref child_node) = node.children().find(|n| n.tag_name().name() == child_name) {
     parse_value_type(child_node)
   } else {
-    Ok(None)
+    None
   }
 }
 
 /// Parses simple value.
-fn parse_simple_value(node: &Node) -> Result<Option<Value>, RunnerError> {
+fn parse_simple_value(node: &Node) -> Option<Value> {
   if let Some(ref value_node) = node.children().find(|n| n.tag_name().name() == NODE_VALUE) {
-    return Ok(Some(Value {
+    return Some(Value {
       typ: optional_xsi_type_attribute(value_node),
       text: optional_content(value_node),
       nil: optional_nil_attribute(value_node),
-    }));
+    });
   }
-  Ok(None)
+  None
 }
 
 /// Parses a collection of component values.
-fn parse_value_components(node: &Node) -> Result<Option<Vec<Component>>, RunnerError> {
+fn parse_value_components(node: &Node) -> Option<Vec<Component>> {
   let mut items = vec![];
   for ref component_node in node.children().filter(|n| n.tag_name().name() == NODE_COMPONENT) {
     items.push(Component {
       name: optional_attribute(component_node, ATTR_NAME),
-      value: parse_value_type(component_node)?,
+      value: parse_value_type(component_node),
       nil: optional_nil_attribute(component_node),
     })
   }
   if !items.is_empty() {
-    return Ok(Some(items));
+    return Some(items);
   }
-  Ok(None)
+  None
 }
 
 /// Parses a list of values.
-fn parse_value_list(node: &Node) -> Result<Option<List>, RunnerError> {
+fn parse_value_list(node: &Node) -> Option<List> {
   let mut items = vec![];
   if let Some(ref list_node) = node.children().find(|n| n.tag_name().name() == NODE_LIST) {
     if optional_nil_attribute(list_node) {
-      return Ok(Some(List::default()));
+      return Some(List::default());
     }
     for ref item_node in list_node.children().filter(|n| n.tag_name().name() == NODE_ITEM) {
-      if let Some(value_type) = parse_value_type(item_node)? {
+      if let Some(value_type) = parse_value_type(item_node) {
         items.push(value_type)
       }
     }
   }
   if !items.is_empty() {
-    return Ok(Some(List { items, nil: false }));
+    return Some(List { items, nil: false });
   }
-  Ok(None)
+  None
 }
 
 /// XML utility function that returns the value of the required attribute or an error.
@@ -380,10 +383,10 @@ fn optional_content(node: &Node) -> Option<String> {
 }
 
 /// XML utility function that returns the required textual content from the optional child node.
-fn optional_child_required_content(node: &Node, child_name: &str) -> Result<Option<String>, RunnerError> {
+fn optional_child_required_content(node: &Node, child_name: &str) -> Option<String> {
   if let Some(child_node) = node.children().find(|n| n.tag_name().name() == child_name) {
-    Ok(required_content(&child_node).ok())
+    required_content(&child_node).ok()
   } else {
-    Ok(None)
+    None
   }
 }
