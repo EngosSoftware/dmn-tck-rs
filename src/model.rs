@@ -19,7 +19,6 @@
 use crate::errors::RunnerError;
 use crate::errors::RunnerError::*;
 use roxmltree::Node;
-use serde::export::Formatter;
 use std::fs::read_to_string;
 use std::path::Path;
 
@@ -64,16 +63,6 @@ pub enum TestCaseType {
   DecisionService,
 }
 
-impl std::fmt::Display for TestCaseType {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    match self {
-      TestCaseType::Decision => write!(f, "decision"),
-      TestCaseType::BusinessKnowledgeModel => write!(f, "bkm"),
-      TestCaseType::DecisionService => write!(f, "decisionService"),
-    }
-  }
-}
-
 /// Single test case.
 #[derive(Debug)]
 pub struct TestCase {
@@ -99,7 +88,18 @@ pub struct InputNode {
   /// Required name of this [InputNode].
   pub name: String,
   /// Optional value of this [InputNode].
-  pub value: Option<ValueType>,
+  pub value: Option<Value>,
+}
+
+/// Result node defined for the test case.
+#[derive(Debug)]
+pub struct ResultNode {
+  pub name: String,
+  pub error_result: bool,
+  pub typ: Option<String>,
+  pub cast: Option<String>,
+  pub expected: Option<Value>,
+  pub computed: Option<Value>,
 }
 
 /// Types of values.
@@ -107,31 +107,20 @@ pub struct InputNode {
 /// collection of components
 /// or a list.
 #[derive(Debug)]
-pub enum ValueType {
-  Simple(Value),
+pub enum Value {
+  Simple(Simple),
   Components(Vec<Component>),
   List(List),
 }
 
-/// Result node expected by test case.
+/// Value representing simple result of the test case.
 #[derive(Debug)]
-pub struct ResultNode {
-  pub name: String,
-  pub error_result: bool,
-  pub typ: Option<String>,
-  pub cast: Option<String>,
-  pub expected: Option<ValueType>,
-  pub computed: Option<ValueType>,
-}
-
-/// Value representing single result of a test case.
-#[derive(Debug)]
-pub struct Value {
+pub struct Simple {
   /// Type of the value in namespace-prefixed form.
   pub typ: Option<String>,
   /// Optional text representing the value.
   pub text: Option<String>,
-  /// Flag indicating if this [Value] is nil, `xsi:nil="true"`.
+  /// Flag indicating if this [Value] is nil, like `xsi:nil="true"`.
   pub nil: bool,
 }
 
@@ -141,8 +130,8 @@ pub struct Component {
   /// Optional name of this component.
   pub name: Option<String>,
   /// Optional value contained in this [Component].
-  pub value: Option<ValueType>,
-  /// Flag indicating if this [Component] is nil, `xsi:nil="true"`.
+  pub value: Option<Value>,
+  /// Flag indicating if this [Component] is nil, like `xsi:nil="true"`.
   pub nil: bool,
 }
 
@@ -150,8 +139,8 @@ pub struct Component {
 #[derive(Debug)]
 pub struct List {
   /// Vector of list items (values), may be empty.
-  pub items: Vec<ValueType>,
-  /// Flag indicating if this [List] is nil, `xsi:nil="true"`.
+  pub items: Vec<Value>,
+  /// Flag indicating if this [List] is nil, like `xsi:nil="true"`.
   pub nil: bool,
 }
 
@@ -263,21 +252,21 @@ fn parse_result_nodes(node: &Node) -> Result<Vec<ResultNode>, RunnerError> {
 }
 
 /// Parses value type.
-fn parse_value_type(node: &Node) -> Option<ValueType> {
+fn parse_value_type(node: &Node) -> Option<Value> {
   if let Some(v) = parse_simple_value(node) {
-    return Some(ValueType::Simple(v));
+    return Some(Value::Simple(v));
   }
   if let Some(c) = parse_value_components(node) {
-    return Some(ValueType::Components(c));
+    return Some(Value::Components(c));
   }
   if let Some(l) = parse_value_list(node) {
-    return Some(ValueType::List(l));
+    return Some(Value::List(l));
   }
   None
 }
 
 /// Parses value type from child node.
-fn parse_child_value_type(node: &Node, child_name: &str) -> Option<ValueType> {
+fn parse_child_value_type(node: &Node, child_name: &str) -> Option<Value> {
   if let Some(ref child_node) = node.children().find(|n| n.tag_name().name() == child_name) {
     parse_value_type(child_node)
   } else {
@@ -286,9 +275,9 @@ fn parse_child_value_type(node: &Node, child_name: &str) -> Option<ValueType> {
 }
 
 /// Parses simple value.
-fn parse_simple_value(node: &Node) -> Option<Value> {
+fn parse_simple_value(node: &Node) -> Option<Simple> {
   if let Some(ref value_node) = node.children().find(|n| n.tag_name().name() == NODE_VALUE) {
-    return Some(Value {
+    return Some(Simple {
       typ: optional_xsi_type_attribute(value_node),
       text: optional_content(value_node),
       nil: optional_nil_attribute(value_node),

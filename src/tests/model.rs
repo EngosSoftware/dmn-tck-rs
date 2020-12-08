@@ -16,7 +16,7 @@
 
 //! Test cases for XML model.
 
-use crate::model::{parse_from_string, TestCaseType, ValueType};
+use crate::model::{parse_from_string, TestCaseType, Value};
 use crate::tests::{TC_0001, TC_0002, TC_0003};
 
 #[test]
@@ -34,7 +34,10 @@ fn test_001() {
   assert_eq!(None, test_case_1.name);
   assert_eq!(TestCaseType::Decision, test_case_1.typ);
   assert_eq!(None, test_case_1.invocable_name);
-  assert_eq!("Testing valid input", test_case_1.description.as_ref().unwrap().as_str());
+  assert_eq!(
+    "Testing valid input",
+    test_case_1.description.as_ref().unwrap().as_str()
+  );
 }
 
 #[test]
@@ -58,12 +61,12 @@ fn test_002() {
   assert_eq!(1, test_case_1.input_nodes.len());
   let input_node_1 = &test_case_1.input_nodes[0];
   match &input_node_1.value {
-    Some(ValueType::Components(components)) => {
+    Some(Value::Components(components)) => {
       assert_eq!(3, components.len());
       let component_1 = &components[0];
       assert_eq!("principal", component_1.name.as_ref().unwrap().as_str());
       match &component_1.value {
-        Some(ValueType::Simple(v)) => {
+        Some(Value::Simple(v)) => {
           assert_eq!("600000", v.text.as_ref().unwrap().as_str());
           assert_eq!("xsd:decimal", v.typ.as_ref().unwrap().as_str());
           assert_eq!(false, v.nil);
@@ -73,7 +76,7 @@ fn test_002() {
       let component_2 = &components[1];
       assert_eq!("rate", component_2.name.as_ref().unwrap().as_str());
       match &component_2.value {
-        Some(ValueType::Simple(v)) => {
+        Some(Value::Simple(v)) => {
           assert_eq!("0.0375", v.text.as_ref().unwrap().as_str());
           assert_eq!("xsd:decimal", v.typ.as_ref().unwrap().as_str());
           assert_eq!(false, v.nil);
@@ -83,7 +86,7 @@ fn test_002() {
       let component_3 = &components[2];
       assert_eq!("termMonths", component_3.name.as_ref().unwrap().as_str());
       match &component_3.value {
-        Some(ValueType::Simple(v)) => {
+        Some(Value::Simple(v)) => {
           assert_eq!("360", v.text.as_ref().unwrap().as_str());
           assert_eq!("xsd:decimal", v.typ.as_ref().unwrap().as_str());
           assert_eq!(false, v.nil);
@@ -104,11 +107,11 @@ fn test_003() {
   assert_eq!("001", test_case_1.id.as_ref().unwrap().as_str());
   let input_node_1 = &test_case_1.input_nodes[0];
   match &input_node_1.value {
-    Some(ValueType::List(l)) => {
+    Some(Value::List(l)) => {
       assert_eq!(3, l.items.len());
       for (i, &text) in ["a", "b", "c"].iter().enumerate() {
         match &l.items[i] {
-          ValueType::Simple(v) => {
+          Value::Simple(v) => {
             assert_eq!(text, v.text.as_ref().unwrap().as_str());
             assert_eq!("xsd:string", v.typ.as_ref().unwrap().as_str());
             assert_eq!(false, v.nil);

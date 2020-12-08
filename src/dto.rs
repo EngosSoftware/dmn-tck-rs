@@ -16,14 +16,40 @@
 
 //!
 
-use crate::model::{Component, InputNode, List, Value, ValueType};
+use crate::model::{Component, InputNode, List, Simple, Value};
+use serde::export::Formatter;
+
+/// Data transfer object for an error.
+#[derive(Debug, Deserialize)]
+pub struct ErrorDto {
+  /// Error details.
+  #[serde(rename = "details")]
+  pub details: String,
+}
+
+impl std::fmt::Display for ErrorDto {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.details)
+  }
+}
+
+/// Data transfer object for a result.
+#[derive(Debug, Deserialize)]
+pub struct ResultDto<T> {
+  /// Result containing data.
+  #[serde(rename = "data")]
+  pub data: Option<T>,
+  /// Result containing errors.
+  #[serde(rename = "errors")]
+  pub errors: Option<Vec<ErrorDto>>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InputNodeDto {
   #[serde(rename = "name")]
   pub name: String,
   #[serde(rename = "value")]
-  pub value: Option<ValueTypeDto>,
+  pub value: Option<ValueDto>,
 }
 
 impl From<&InputNode> for InputNodeDto {
@@ -31,24 +57,30 @@ impl From<&InputNode> for InputNodeDto {
     Self {
       name: input_node.name.clone(),
       value: match &input_node.value {
-        Some(value_type) => Some(ValueTypeDto::from(value_type)),
+        Some(value_type) => Some(value_type.into()),
         _ => None,
       },
     }
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ValueTypeDto {
+#[derive(Debug, Deserialize)]
+pub struct ExpectedValueDto {
+  #[serde(rename = "value")]
+  pub value: Option<ValueDto>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct ValueDto {
   #[serde(rename = "simple", skip_serializing_if = "Option::is_none")]
-  pub simple: Option<ValueDto>,
+  pub simple: Option<SimpleDto>,
   #[serde(rename = "components", skip_serializing_if = "Option::is_none")]
   pub components: Option<Vec<ComponentDto>>,
   #[serde(rename = "list", skip_serializing_if = "Option::is_none")]
   pub list: Option<ListDto>,
 }
 
-impl Default for ValueTypeDto {
+impl Default for ValueDto {
   fn default() -> Self {
     Self {
       simple: None,
@@ -58,18 +90,19 @@ impl Default for ValueTypeDto {
   }
 }
 
-impl From<&ValueType> for ValueTypeDto {
-  fn from(value_type: &ValueType) -> Self {
+impl From<&Value> for ValueDto {
+  fn from(value_type: &Value) -> Self {
     match &value_type {
-      ValueType::Simple(value) => Self {
-        simple: Some(ValueDto::from(value)),
+      Value::Simple(simple) => Self {
+        simple: Some(simple.into()),
         ..Default::default()
       },
-      ValueType::Components(components) => Self {
+      Value::Components(components) => Self {
         components: Some(components.iter().map(ComponentDto::from).collect()),
         ..Default::default()
       },
-      ValueType::List(list) => Self {
+
+      Value::List(list) => Self {
         list: Some(ListDto::from(list)),
         ..Default::default()
       },
@@ -77,8 +110,8 @@ impl From<&ValueType> for ValueTypeDto {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ValueDto {
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct SimpleDto {
   #[serde(rename = "type")]
   pub typ: Option<String>,
   #[serde(rename = "text")]
@@ -87,22 +120,22 @@ pub struct ValueDto {
   pub nil: bool,
 }
 
-impl From<&Value> for ValueDto {
-  fn from(value: &Value) -> Self {
+impl From<&Simple> for SimpleDto {
+  fn from(simple: &Simple) -> Self {
     Self {
-      typ: value.typ.clone(),
-      text: value.text.clone(),
-      nil: value.nil,
+      typ: simple.typ.clone(),
+      text: simple.text.clone(),
+      nil: simple.nil,
     }
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct ComponentDto {
   #[serde(rename = "name")]
   pub name: Option<String>,
   #[serde(rename = "value")]
-  pub value: Option<ValueTypeDto>,
+  pub value: Option<ValueDto>,
   #[serde(rename = "isNil")]
   pub nil: bool,
 }
@@ -112,7 +145,7 @@ impl From<&Component> for ComponentDto {
     Self {
       name: component.name.clone(),
       value: match &component.value {
-        Some(value_type) => Some(ValueTypeDto::from(value_type)),
+        Some(value) => Some(value.into()),
         _ => None,
       },
       nil: component.nil,
@@ -120,10 +153,10 @@ impl From<&Component> for ComponentDto {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct ListDto {
   #[serde(rename = "items")]
-  pub items: Vec<ValueTypeDto>,
+  pub items: Vec<ValueDto>,
   #[serde(rename = "isNil")]
   pub nil: bool,
 }
@@ -131,7 +164,7 @@ pub struct ListDto {
 impl From<&List> for ListDto {
   fn from(list: &List) -> Self {
     Self {
-      items: list.items.iter().map(ValueTypeDto::from).collect(),
+      items: list.items.iter().map(ValueDto::from).collect(),
       nil: list.nil,
     }
   }

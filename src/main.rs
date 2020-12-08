@@ -15,7 +15,7 @@
  */
 
 //! Runner for Decision Model and Notation™ Technology Compatibility Kit written in Rust.
-#![feature(array_map)]
+
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -30,7 +30,7 @@ use http::Uri;
 use reqwest::blocking::Client;
 use serde_yaml::{from_str, Error};
 
-use crate::dto::InputNodeDto;
+use crate::dto::{ExpectedValueDto, InputNodeDto, ResultDto, ValueDto};
 use crate::errors::RunnerError;
 use crate::model::parse_from_file;
 use crate::validator::validate_test_cases_file;
@@ -211,10 +211,10 @@ fn execute_tests(
   for test_case in &test_cases.test_cases {
     let test_id = test_case.id.as_ref().unwrap_or(&empty_id);
     for result_node in &test_case.result_nodes {
-      let name = result_node.name.clone();
+      let name = &result_node.name;
       let artifact = match &result_node.typ {
-        Some(t) => t.clone(),
-        _ => format!("{}", test_case.typ),
+        Some(typ) => typ.clone(),
+        _ => format!("{:?}", test_case.typ),
       };
       print!(
         "\nEVALUATING: test case id: {}, result node name: '{}', artifact: '{}'\n",
@@ -222,23 +222,42 @@ fn execute_tests(
       );
       let params = EvaluateParams {
         artifact,
-        name,
+        name: name.clone(),
         input: test_case.input_nodes.iter().map(InputNodeDto::from).collect(),
       };
       match client.post(evaluate_url).json(&params).send() {
-        Ok(response) => {
-          let response_text = response.text().unwrap();
-          println!("{}", response_text);
-          let remarks = response_text.replace("\"", "`");
-          if response_text.contains("errors") {
-            write_line(writer, &path, &test_id, "FAILURE", &remarks);
-          } else {
-            write_line(writer, &path, &test_id, "SUCCESS", &remarks);
+        Ok(response) => match response.json::<ResultDto<ExpectedValueDto>>() {
+          Ok(result) => {
+            println!("{:?}", result);
+            if let Some(data) = result.data {
+              if let Some(expected) = &result_node.expected {
+                let a = data.value.expect("there should be expected value present");
+                let c = ValueDto::from(expected);
+                if a == c {
+                  write_line(writer, &path, &test_id, "SUCCESS", "");
+                } else {
+                  let reason = format!("{:?} <<>> {:?}", a, c);
+                  write_line(writer, &path, &test_id, "FAILURE", &reason);
+                }
+              } else {
+                write_line(writer, &path, &test_id, "FAILURE", "no expected value defined");
+              }
+            }
+            if let Some(errors) = result.errors {
+              let reason = errors
+                .iter()
+                .map(|e| format!("{}", e))
+                .collect::<Vec<String>>()
+                .join(", ");
+              write_line(writer, &path, &test_id, "FAILURE", &reason);
+            }
           }
-        }
+          Err(reason) => {
+            write_line(writer, &path, &test_id, "FAILURE", &reason.to_string());
+          }
+        },
         Err(reason) => {
           write_line(writer, &path, &test_id, "FAILURE", &reason.to_string());
-          eprintln!("ERROR: {}", reason.to_string())
         }
       }
     }
@@ -262,11 +281,16 @@ fn write_line(writer: &mut BufWriter<File>, path: &Path, test_id: &str, test_res
     r#""{}","{}","{}","{}","{}""#,
     dir_name, file_name, test_id, test_result, remarks
   )
-  .expect("writing should have worked");
+  .expect("writing line should work");
+  match test_result {
+    "FAILURE" => eprintln!("{}: {}", test_result, remarks),
+    "SUCCESS" => eprintln!("{}", test_result),
+    _ => println!("{}: {}", test_result, remarks),
+  }
 }
 
 fn get_writer() -> BufWriter<File> {
-  let file = File::create("report.csv").expect("creating report file should have worked");
+  let file = File::create("report.csv").expect("creating report file should work");
   BufWriter::new(file)
 }
 
