@@ -28,7 +28,6 @@ use std::process::exit;
 
 use http::Uri;
 use reqwest::blocking::Client;
-use serde_yaml::{from_str, Error};
 
 use crate::dto::{ExpectedValueDto, InputNodeDto, ResultDto, ValueDto};
 use crate::errors::RunnerError;
@@ -36,13 +35,19 @@ use crate::model::parse_from_file;
 use crate::validator::validate_test_cases_file;
 use std::fs::File;
 use std::io::{BufWriter, Write};
+use std::sync::atomic::{AtomicU64, Ordering};
 
+mod config;
 mod dto;
 mod errors;
 mod model;
 #[cfg(test)]
 mod tests;
 mod validator;
+
+static SUCCESS_COUNT: AtomicU64 = AtomicU64::new(0);
+static FAILURE_COUNT: AtomicU64 = AtomicU64::new(0);
+static OTHER_COUNT: AtomicU64 = AtomicU64::new(0);
 
 /// Parameters for deploying definitions from *.dmn files.
 #[derive(Serialize)]
@@ -69,51 +74,32 @@ pub struct EvaluateParams {
   input: Vec<InputNodeDto>,
 }
 
-/// Runner configuration parameters.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ConfigurationParams {
-  /// Path to directory containing test cases.
-  test_cases_dir_path: String,
-  /// URL to REST service where dmn definitions will be deployed.
-  deploy_url: String,
-  /// URL to REST service where dmn definitions will be evaluated.
-  evaluate_url: String,
-  /// Path to write csv report file.
-  report_file_path: String,
-}
-
 /// Main entrypoint of the runner.
 fn main() {
-  println!("Starting DMN TCK runner...");
-  if let Some(config) = get_config() {
-    let dir_path = Path::new(&config.test_cases_dir_path);
-    println!("Searching DMN files in directory: {:?}", dir_path);
-    if dir_path.exists() && dir_path.is_dir() {
-      let client = reqwest::blocking::Client::new();
-      let count = process_dmn_files(dir_path, &client, &config.deploy_url);
-      println!("\nProcessed {} *.dmn files.\n", count);
-      let mut writer = get_writer();
-      if let Ok(count) = process_xml_files(&mut writer, dir_path, &client, &config.evaluate_url) {
-        println!("\nProcessed {} *.xml files.\n", count);
-      }
-      writer.flush().expect("flushing output file should not fail");
+  let config = config::get();
+  let dir_path = Path::new(&config.test_cases_dir_path);
+  if dir_path.exists() && dir_path.is_dir() {
+    println!("Starting DMN TCK runner...");
+    println!("Searching DMN files in directory: {}", dir_path.display());
+    let client = reqwest::blocking::Client::new();
+    let count = process_dmn_files(dir_path, &client, &config.deploy_url);
+    println!("Deployed {} *.dmn files.", count);
+    let mut writer = get_writer();
+    if let Ok(count) = process_xml_files(&mut writer, dir_path, &client, &config.evaluate_url) {
+      println!("Processed {} *.xml files.", count);
     }
-  }
-  usage();
-}
-
-fn get_config() -> Option<ConfigurationParams> {
-  if let Ok(file_content) = fs::read_to_string("runner.yml") {
-    let config_result: Result<ConfigurationParams, Error> = from_str(&file_content);
-    if let Ok(config) = config_result {
-      return Some(config);
-    } else {
-      println!("Cannot read runner.yml - {}", config_result.err()?)
-    }
+    writer.flush().expect("flushing output file failed");
+    let success_count = SUCCESS_COUNT.load(Ordering::Relaxed);
+    let failure_count = FAILURE_COUNT.load(Ordering::Relaxed);
+    let other_count = OTHER_COUNT.load(Ordering::Relaxed);
+    println!("-----------------");
+    println!("    Total: {}", success_count + failure_count + other_count);
+    println!("  Success: {}", success_count);
+    println!("  Failure: {}", failure_count);
+    println!("    Other: {}", other_count);
   } else {
-    println!("Cannot find runner.yml")
+    usage();
   }
-  None
 }
 
 fn process_dmn_files(path: &Path, client: &Client, deploy_url: &str) -> u64 {
@@ -154,7 +140,7 @@ fn deploy_dmn_definitions(path: &PathBuf, client: &Client, deploy_url: &str) {
           match client.post(deploy_url).json(&params).send() {
             Ok(response) => match response.text() {
               Ok(text) => {
-                println!("{}\n", text);
+                println!("{}", text);
                 if text.contains("errors") {
                   exit(0);
                 }
@@ -200,7 +186,7 @@ fn execute_tests(
   client: &Client,
   evaluate_url: &str,
 ) -> Result<(), RunnerError> {
-  println!("\nProcessing file: {}", path.display());
+  println!("Processing file: {}", path.display());
   print!("Validating...");
   validate_test_cases_file(&path)?;
   print!("OK");
@@ -217,7 +203,7 @@ fn execute_tests(
         _ => format!("{:?}", test_case.typ),
       };
       print!(
-        "\nEVALUATING: test case id: {}, result node name: '{}', artifact: '{}'\n",
+        "Executing test case: {}, result name: '{}', artifact: '{}'\n",
         test_id, name, artifact
       );
       let params = EvaluateParams {
@@ -228,28 +214,31 @@ fn execute_tests(
       match client.post(evaluate_url).json(&params).send() {
         Ok(response) => match response.json::<ResultDto<ExpectedValueDto>>() {
           Ok(result) => {
-            println!("{:?}", result);
             if let Some(data) = result.data {
-              if let Some(expected) = &result_node.expected {
-                let a = data.value.expect("there should be expected value present");
-                let c = ValueDto::from(expected);
-                if a == c {
-                  write_line(writer, &path, &test_id, "SUCCESS", "");
+              if let Some(actual_dto) = data.value {
+                if let Some(expected) = &result_node.expected {
+                  let expected_dto = ValueDto::from(expected);
+                  if actual_dto == expected_dto {
+                    write_line(writer, &path, &test_id, "SUCCESS", "");
+                  } else {
+                    let remarks = format!("actual <> expected : {:?} <<>> {:?}", actual_dto, expected_dto);
+                    write_line(writer, &path, &test_id, "FAILURE", &remarks);
+                  }
                 } else {
-                  let reason = format!("{:?} <<>> {:?}", a, c);
-                  write_line(writer, &path, &test_id, "FAILURE", &reason);
+                  write_line(writer, &path, &test_id, "FAILURE", "no expected value");
                 }
               } else {
-                write_line(writer, &path, &test_id, "FAILURE", "no expected value defined");
+                write_line(writer, &path, &test_id, "FAILURE", "no actual value");
               }
-            }
-            if let Some(errors) = result.errors {
-              let reason = errors
+            } else if let Some(errors) = result.errors {
+              let remarks = errors
                 .iter()
                 .map(|e| format!("{}", e))
                 .collect::<Vec<String>>()
                 .join(", ");
-              write_line(writer, &path, &test_id, "FAILURE", &reason);
+              write_line(writer, &path, &test_id, "FAILURE", &remarks);
+            } else {
+              write_line(writer, &path, &test_id, "FAILURE", format!("{:?}", result).as_str());
             }
           }
           Err(reason) => {
@@ -268,29 +257,38 @@ fn execute_tests(
 fn write_line(writer: &mut BufWriter<File>, path: &Path, test_id: &str, test_result: &str, remarks: &str) {
   let dir_name = path
     .parent()
-    .expect("taking parent path should work")
+    .expect("taking parent path failed")
     .to_str()
-    .expect("converting parent path to string should work");
+    .expect("converting parent path to string failed");
   let file_name = path
     .file_stem()
-    .expect("taking file stem should work")
+    .expect("taking file stem failed")
     .to_str()
-    .expect("converting file stem to string should work");
+    .expect("converting file stem to string failed");
   writeln!(
     writer,
     r#""{}","{}","{}","{}","{}""#,
     dir_name, file_name, test_id, test_result, remarks
   )
-  .expect("writing line should work");
-  match test_result {
-    "FAILURE" => eprintln!("{}: {}", test_result, remarks),
-    "SUCCESS" => eprintln!("{}", test_result),
-    _ => println!("{}: {}", test_result, remarks),
+  .expect("writing output line failed");
+  match test_result.to_lowercase().as_str() {
+    "failure" => {
+      FAILURE_COUNT.fetch_add(1, Ordering::Relaxed);
+      eprintln!("FAILURE: {}", remarks);
+    }
+    "success" => {
+      SUCCESS_COUNT.fetch_add(1, Ordering::Relaxed);
+      println!("SUCCESS");
+    }
+    _ => {
+      OTHER_COUNT.fetch_add(1, Ordering::Relaxed);
+      println!("{}: {}", test_result, remarks);
+    }
   }
 }
 
 fn get_writer() -> BufWriter<File> {
-  let file = File::create("report.csv").expect("creating report file should work");
+  let file = File::create("report.csv").expect("creating output file failed");
   BufWriter::new(file)
 }
 

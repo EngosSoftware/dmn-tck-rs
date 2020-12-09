@@ -27,12 +27,6 @@ pub struct ErrorDto {
   pub details: String,
 }
 
-impl std::fmt::Display for ErrorDto {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.details)
-  }
-}
-
 /// Data transfer object for a result.
 #[derive(Debug, Deserialize)]
 pub struct ResultDto<T> {
@@ -52,18 +46,6 @@ pub struct InputNodeDto {
   pub value: Option<ValueDto>,
 }
 
-impl From<&InputNode> for InputNodeDto {
-  fn from(input_node: &InputNode) -> Self {
-    Self {
-      name: input_node.name.clone(),
-      value: match &input_node.value {
-        Some(value_type) => Some(value_type.into()),
-        _ => None,
-      },
-    }
-  }
-}
-
 #[derive(Debug, Deserialize)]
 pub struct ExpectedValueDto {
   #[serde(rename = "value")]
@@ -80,36 +62,6 @@ pub struct ValueDto {
   pub list: Option<ListDto>,
 }
 
-impl Default for ValueDto {
-  fn default() -> Self {
-    Self {
-      simple: None,
-      components: None,
-      list: None,
-    }
-  }
-}
-
-impl From<&Value> for ValueDto {
-  fn from(value_type: &Value) -> Self {
-    match &value_type {
-      Value::Simple(simple) => Self {
-        simple: Some(simple.into()),
-        ..Default::default()
-      },
-      Value::Components(components) => Self {
-        components: Some(components.iter().map(ComponentDto::from).collect()),
-        ..Default::default()
-      },
-
-      Value::List(list) => Self {
-        list: Some(ListDto::from(list)),
-        ..Default::default()
-      },
-    }
-  }
-}
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct SimpleDto {
   #[serde(rename = "type")]
@@ -118,16 +70,6 @@ pub struct SimpleDto {
   pub text: Option<String>,
   #[serde(rename = "isNil")]
   pub nil: bool,
-}
-
-impl From<&Simple> for SimpleDto {
-  fn from(simple: &Simple) -> Self {
-    Self {
-      typ: simple.typ.clone(),
-      text: simple.text.clone(),
-      nil: simple.nil,
-    }
-  }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -166,6 +108,63 @@ impl From<&List> for ListDto {
     Self {
       items: list.items.iter().map(ValueDto::from).collect(),
       nil: list.nil,
+    }
+  }
+}
+
+impl std::fmt::Display for ErrorDto {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.details)
+  }
+}
+
+impl From<&InputNode> for InputNodeDto {
+  fn from(input_node: &InputNode) -> Self {
+    Self {
+      name: input_node.name.clone(),
+      value: match &input_node.value {
+        Some(value_type) => Some(value_type.into()),
+        _ => None,
+      },
+    }
+  }
+}
+
+impl From<&Simple> for SimpleDto {
+  fn from(simple: &Simple) -> Self {
+    Self {
+      typ: simple.typ.clone(),
+      text: simple.text.clone(),
+      nil: simple.nil,
+    }
+  }
+}
+
+impl Default for ValueDto {
+  fn default() -> Self {
+    Self {
+      simple: None,
+      components: None,
+      list: None,
+    }
+  }
+}
+
+impl From<&Value> for ValueDto {
+  fn from(value: &Value) -> Self {
+    match &value {
+      Value::Simple(simple) => Self {
+        simple: Some(simple.into()),
+        ..Default::default()
+      },
+      Value::Components(components) => Self {
+        components: Some(components.iter().map(ComponentDto::from).collect()),
+        ..Default::default()
+      },
+      Value::List(list) => Self {
+        list: Some(ListDto::from(list)),
+        ..Default::default()
+      },
     }
   }
 }
