@@ -19,25 +19,6 @@
 use crate::model::{Component, InputNode, List, Simple, Value};
 use serde::export::Formatter;
 
-/// Data transfer object for an error.
-#[derive(Debug, Deserialize)]
-pub struct ErrorDto {
-  /// Error details.
-  #[serde(rename = "details")]
-  pub details: String,
-}
-
-/// Data transfer object for a result.
-#[derive(Debug, Deserialize)]
-pub struct ResultDto<T> {
-  /// Result containing data.
-  #[serde(rename = "data")]
-  pub data: Option<T>,
-  /// Result containing errors.
-  #[serde(rename = "errors")]
-  pub errors: Option<Vec<ErrorDto>>,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InputNodeDto {
   #[serde(rename = "name")]
@@ -109,12 +90,6 @@ impl From<&List> for ListDto {
       items: list.items.iter().map(ValueDto::from).collect(),
       nil: list.nil,
     }
-  }
-}
-
-impl std::fmt::Display for ErrorDto {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.details)
   }
 }
 

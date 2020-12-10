@@ -29,9 +29,11 @@ use std::process::exit;
 use http::Uri;
 use reqwest::blocking::Client;
 
-use crate::dto::{ExpectedValueDto, InputNodeDto, ResultDto, ValueDto};
+use crate::dto::{ExpectedValueDto, InputNodeDto, ValueDto};
 use crate::errors::RunnerError;
 use crate::model::parse_from_file;
+use crate::params::{DeployParams, EvaluateParams};
+use crate::results::{DeployResult, ResultDto};
 use crate::validator::validate_test_cases_file;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -41,48 +43,26 @@ mod config;
 mod dto;
 mod errors;
 mod model;
+mod params;
+mod results;
 #[cfg(test)]
 mod tests;
+mod utils;
 mod validator;
 
 static SUCCESS_COUNT: AtomicU64 = AtomicU64::new(0);
 static FAILURE_COUNT: AtomicU64 = AtomicU64::new(0);
 static OTHER_COUNT: AtomicU64 = AtomicU64::new(0);
 
-/// Parameters for deploying definitions from *.dmn files.
-#[derive(Serialize)]
-pub struct DeployParams {
-  /// URI from which the file content is transmitted.
-  #[serde(rename = "file")]
-  file: String,
-  /// DMN definition file content (Base64 encoded).
-  #[serde(rename = "content")]
-  content: String,
-}
-
-/// Parameters for evaluating decision artifact.
-#[derive(Serialize)]
-pub struct EvaluateParams {
-  /// Type of decision artifact to be evaluated.
-  #[serde(rename = "artifact")]
-  artifact: String,
-  /// Name of the artifact to be evaluated.
-  #[serde(rename = "name")]
-  name: String,
-  /// Input values.
-  #[serde(rename = "input")]
-  input: Vec<InputNodeDto>,
-}
-
 /// Main entrypoint of the runner.
-fn main() {
+fn main() -> Result<(), RunnerError> {
   let config = config::get();
   let dir_path = Path::new(&config.test_cases_dir_path);
   if dir_path.exists() && dir_path.is_dir() {
     println!("Starting DMN TCK runner...");
     println!("Searching DMN files in directory: {}", dir_path.display());
     let client = reqwest::blocking::Client::new();
-    let count = process_dmn_files(dir_path, &client, &config.deploy_url);
+    let count = process_dmn_files(dir_path, &client, &config.deploy_url)?;
     println!("Deployed {} *.dmn files.", count);
     let mut writer = get_writer();
     if let Ok(count) = process_xml_files(&mut writer, dir_path, &client, &config.evaluate_url) {
@@ -100,59 +80,74 @@ fn main() {
   } else {
     usage();
   }
+  Ok(())
 }
 
-fn process_dmn_files(path: &Path, client: &Client, deploy_url: &str) -> u64 {
+fn process_dmn_files(path: &Path, client: &Client, deploy_url: &str) -> Result<u64, RunnerError> {
   let mut count = 0;
   if let Ok(entries) = fs::read_dir(path) {
     for entry in entries {
       if let Ok(dir_entry) = entry {
         let path = dir_entry.path();
         if path.is_dir() {
-          count += process_dmn_files(&path, client, deploy_url);
+          count += process_dmn_files(&path, client, deploy_url)?;
         } else if let Some(ext) = path.extension() {
           if ext == "dmn" {
-            deploy_dmn_definitions(&path, client, deploy_url);
+            deploy_dmn_definitions(&path, client, deploy_url)?;
             count += 1;
           }
         }
       }
     }
   }
-  count
+  Ok(count)
 }
 
-fn deploy_dmn_definitions(path: &PathBuf, client: &Client, deploy_url: &str) {
+fn deploy_dmn_definitions(path: &PathBuf, client: &Client, deploy_url: &str) -> Result<(), RunnerError> {
   if let Ok(canonical) = fs::canonicalize(path) {
-    if let Some(p_and_q) = canonical.to_str() {
-      if let Ok(file_href) = Uri::builder()
+    if let Some(path_and_query) = canonical.to_str() {
+      if let Ok(source) = Uri::builder()
         .scheme("file")
         .authority("localhost")
-        .path_and_query(p_and_q)
+        .path_and_query(path_and_query)
         .build()
       {
-        println!("Deploying: {}", file_href);
+        println!("Deploying: {}", source);
         if let Ok(content) = fs::read_to_string(canonical) {
           let params = DeployParams {
-            file: file_href.to_string(),
-            content: base64::encode(content),
+            source: Some(source.to_string()),
+            content: Some(base64::encode(content)),
+            tag: Some(utils::file_name(path)),
           };
           match client.post(deploy_url).json(&params).send() {
-            Ok(response) => match response.text() {
-              Ok(text) => {
-                println!("{}", text);
-                if text.contains("errors") {
-                  exit(0);
+            Ok(response) => match response.json::<ResultDto<DeployResult>>() {
+              Ok(result) => {
+                if let Some(data) = result.data {
+                  println!(
+                    "SUCCESS\n    name: {}\n      id: {}\n     tag: {}",
+                    data.name.unwrap_or("(no value)".to_string()),
+                    data.id.unwrap_or("(no value)".to_string()),
+                    data.tag.unwrap_or("(no value)".to_string())
+                  )
+                } else if result.errors.is_some() {
+                  return Err(RunnerError::DeploymentFailed(result.errors_as_string()));
+                } else {
+                  return Err(RunnerError::DeploymentFailed(format!("{:?}", result)));
                 }
               }
-              Err(reason) => println!("ERROR: {:?}", reason),
+              Err(reason) => {
+                return Err(RunnerError::DeploymentFailed(format!("{:?}", reason)));
+              }
             },
-            Err(reason) => println!("ERROR: {:?}", reason),
+            Err(reason) => {
+              return Err(RunnerError::DeploymentFailed(format!("{:?}", reason)));
+            }
           }
         }
       }
     }
   }
+  Ok(())
 }
 
 fn process_xml_files(
@@ -207,6 +202,7 @@ fn execute_tests(
         test_id, name, artifact
       );
       let params = EvaluateParams {
+        tag: test_cases.model_name.clone(),
         artifact,
         name: name.clone(),
         input: test_case.input_nodes.iter().map(InputNodeDto::from).collect(),
@@ -230,13 +226,8 @@ fn execute_tests(
               } else {
                 write_line(writer, &path, &test_id, "FAILURE", "no actual value");
               }
-            } else if let Some(errors) = result.errors {
-              let remarks = errors
-                .iter()
-                .map(|e| format!("{}", e))
-                .collect::<Vec<String>>()
-                .join(", ");
-              write_line(writer, &path, &test_id, "FAILURE", &remarks);
+            } else if result.errors.is_some() {
+              write_line(writer, &path, &test_id, "FAILURE", &result.errors_as_string());
             } else {
               write_line(writer, &path, &test_id, "FAILURE", format!("{:?}", result).as_str());
             }
@@ -275,6 +266,7 @@ fn write_line(writer: &mut BufWriter<File>, path: &Path, test_id: &str, test_res
     "failure" => {
       FAILURE_COUNT.fetch_add(1, Ordering::Relaxed);
       eprintln!("FAILURE: {}", remarks);
+      exit(0);
     }
     "success" => {
       SUCCESS_COUNT.fetch_add(1, Ordering::Relaxed);
