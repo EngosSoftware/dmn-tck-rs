@@ -23,14 +23,14 @@ extern crate serde_derive;
 extern crate serde_json;
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::exit;
 
 use http::Uri;
 use reqwest::blocking::Client;
 
 use crate::dto::{ExpectedValueDto, InputNodeDto, ValueDto};
-use crate::errors::RunnerError;
+use crate::errors::{Result, RunnerError};
 use crate::model::parse_from_file;
 use crate::params::{DeployParams, EvaluateParams};
 use crate::results::{DeployResult, ResultDto};
@@ -47,7 +47,6 @@ mod params;
 mod results;
 #[cfg(test)]
 mod tests;
-mod utils;
 mod validator;
 
 static SUCCESS_COUNT: AtomicU64 = AtomicU64::new(0);
@@ -55,19 +54,24 @@ static FAILURE_COUNT: AtomicU64 = AtomicU64::new(0);
 static OTHER_COUNT: AtomicU64 = AtomicU64::new(0);
 
 /// Main entrypoint of the runner.
-fn main() -> Result<(), RunnerError> {
+fn main() -> Result<()> {
   let config = config::get();
   let dir_path = Path::new(&config.test_cases_dir_path);
   if dir_path.exists() && dir_path.is_dir() {
     println!("Starting DMN TCK runner...");
-    println!("Searching DMN files in directory: {}", dir_path.display());
     let client = reqwest::blocking::Client::new();
-    let count = process_dmn_files(dir_path, &client, &config.deploy_url)?;
-    println!("Deployed {} *.dmn files.", count);
-    let mut writer = get_writer();
-    if let Ok(count) = process_xml_files(&mut writer, dir_path, &client, &config.evaluate_url) {
-      println!("Processed {} *.xml files.", count);
+    println!("Searching DMN files in directory: {}", dir_path.display());
+    let dmn_files = sorted_files(dir_path, "dmn")?;
+    for dmn_file in &dmn_files {
+      deploy_dmn_definitions(dmn_file, &client, &config.deploy_url)?;
     }
+    println!("\n\nDeployed {} *.dmn files.\n", dmn_files.len());
+    let mut writer = get_writer();
+    let xml_files = sorted_files(dir_path, "xml")?;
+    for xml_file in &xml_files {
+      execute_tests(&mut writer, xml_file, &client, &config.evaluate_url)?;
+    }
+    println!("Processed {} *.xml files.", xml_files.len());
     writer.flush().expect("flushing output file failed");
     let success_count = SUCCESS_COUNT.load(Ordering::Relaxed);
     let failure_count = FAILURE_COUNT.load(Ordering::Relaxed);
@@ -83,66 +87,42 @@ fn main() -> Result<(), RunnerError> {
   Ok(())
 }
 
-fn process_dmn_files(path: &Path, client: &Client, deploy_url: &str) -> Result<u64, RunnerError> {
-  let mut count = 0;
-  if let Ok(entries) = fs::read_dir(path) {
-    for entry in entries {
-      if let Ok(dir_entry) = entry {
-        let path = dir_entry.path();
-        if path.is_dir() {
-          count += process_dmn_files(&path, client, deploy_url)?;
-        } else if let Some(ext) = path.extension() {
-          if ext == "dmn" {
-            deploy_dmn_definitions(&path, client, deploy_url)?;
-            count += 1;
-          }
-        }
-      }
-    }
-  }
-  Ok(count)
-}
-
-fn deploy_dmn_definitions(path: &PathBuf, client: &Client, deploy_url: &str) -> Result<(), RunnerError> {
-  if let Ok(canonical) = fs::canonicalize(path) {
-    if let Some(path_and_query) = canonical.to_str() {
-      if let Ok(source) = Uri::builder()
-        .scheme("file")
-        .authority("localhost")
-        .path_and_query(path_and_query)
-        .build()
-      {
-        println!("Deploying: {}", source);
-        if let Ok(content) = fs::read_to_string(canonical) {
-          let params = DeployParams {
-            source: Some(source.to_string()),
-            content: Some(base64::encode(content)),
-            tag: Some(utils::file_name(path)),
-          };
-          match client.post(deploy_url).json(&params).send() {
-            Ok(response) => match response.json::<ResultDto<DeployResult>>() {
-              Ok(result) => {
-                if let Some(data) = result.data {
-                  println!(
-                    "SUCCESS\n    name: {}\n      id: {}\n     tag: {}",
-                    data.name.unwrap_or("(no value)".to_string()),
-                    data.id.unwrap_or("(no value)".to_string()),
-                    data.tag.unwrap_or("(no value)".to_string())
-                  )
-                } else if result.errors.is_some() {
-                  return Err(RunnerError::DeploymentFailed(result.errors_as_string()));
-                } else {
-                  return Err(RunnerError::DeploymentFailed(format!("{:?}", result)));
-                }
-              }
-              Err(reason) => {
-                return Err(RunnerError::DeploymentFailed(format!("{:?}", reason)));
-              }
-            },
-            Err(reason) => {
-              return Err(RunnerError::DeploymentFailed(format!("{:?}", reason)));
+fn deploy_dmn_definitions(dmn_file: &str, client: &Client, deploy_url: &str) -> Result<()> {
+  if let Ok(source) = Uri::builder()
+    .scheme("file")
+    .authority("localhost")
+    .path_and_query(dmn_file)
+    .build()
+  {
+    println!("\nDeploying: {}", source);
+    if let Ok(content) = fs::read_to_string(dmn_file) {
+      let params = DeployParams {
+        source: Some(source.to_string()),
+        content: Some(base64::encode(content)),
+        tag: Some(file_name(dmn_file)),
+      };
+      match client.post(deploy_url).json(&params).send() {
+        Ok(response) => match response.json::<ResultDto<DeployResult>>() {
+          Ok(result) => {
+            if let Some(data) = result.data {
+              println!(
+                "SUCCESS\n    name: {}\n      id: {}\n     tag: {}",
+                data.name.unwrap_or_else(|| "(no value)".to_string()),
+                data.id.unwrap_or_else(|| "(no value)".to_string()),
+                data.tag.unwrap_or_else(|| "(no value)".to_string())
+              )
+            } else if result.errors.is_some() {
+              return Err(RunnerError::DeploymentFailed(result.errors_as_string()));
+            } else {
+              return Err(RunnerError::DeploymentFailed(format!("{:?}", result)));
             }
           }
+          Err(reason) => {
+            return Err(RunnerError::DeploymentFailed(format!("{:?}", reason)));
+          }
+        },
+        Err(reason) => {
+          return Err(RunnerError::DeploymentFailed(format!("{:?}", reason)));
         }
       }
     }
@@ -150,43 +130,13 @@ fn deploy_dmn_definitions(path: &PathBuf, client: &Client, deploy_url: &str) -> 
   Ok(())
 }
 
-fn process_xml_files(
-  writer: &mut BufWriter<File>,
-  path: &Path,
-  client: &Client,
-  evaluate_url: &str,
-) -> Result<u64, RunnerError> {
-  let mut count = 0;
-  if let Ok(entries) = fs::read_dir(path) {
-    for entry in entries {
-      if let Ok(dir_entry) = entry {
-        let path = dir_entry.path();
-        if path.is_dir() {
-          count += process_xml_files(writer, &path, client, evaluate_url)?;
-        } else if let Some(ext) = path.extension() {
-          if ext == "xml" {
-            execute_tests(writer, &path, client, evaluate_url)?;
-            count += 1;
-          }
-        }
-      }
-    }
-  }
-  Ok(count)
-}
-
-fn execute_tests(
-  writer: &mut BufWriter<File>,
-  path: &Path,
-  client: &Client,
-  evaluate_url: &str,
-) -> Result<(), RunnerError> {
-  println!("Processing file: {}", path.display());
+fn execute_tests(writer: &mut BufWriter<File>, name: &str, client: &Client, evaluate_url: &str) -> Result<()> {
+  println!("\nProcessing file: {}", name);
   print!("Validating...");
-  validate_test_cases_file(&path)?;
+  validate_test_cases_file(name)?;
   print!("OK");
   print!(",  Parsing...");
-  let test_cases = parse_from_file(path)?;
+  let test_cases = parse_from_file(name)?;
   println!("OK");
   let empty_id = String::new();
   for test_case in &test_cases.test_cases {
@@ -197,8 +147,8 @@ fn execute_tests(
         Some(typ) => typ.clone(),
         _ => format!("{:?}", test_case.typ),
       };
-      print!(
-        "Executing test case: {}, result name: '{}', artifact: '{}'\n",
+      println!(
+        "Executing test case: {}, result name: '{}', artifact: '{}'",
         test_id, name, artifact
       );
       let params = EvaluateParams {
@@ -215,29 +165,29 @@ fn execute_tests(
                 if let Some(expected) = &result_node.expected {
                   let expected_dto = ValueDto::from(expected);
                   if actual_dto == expected_dto {
-                    write_line(writer, &path, &test_id, "SUCCESS", "");
+                    write_line(writer, name, &test_id, "SUCCESS", "");
                   } else {
                     let remarks = format!("actual <> expected : {:?} <<>> {:?}", actual_dto, expected_dto);
-                    write_line(writer, &path, &test_id, "FAILURE", &remarks);
+                    write_line(writer, name, &test_id, "FAILURE", &remarks);
                   }
                 } else {
-                  write_line(writer, &path, &test_id, "FAILURE", "no expected value");
+                  write_line(writer, name, &test_id, "FAILURE", "no expected value");
                 }
               } else {
-                write_line(writer, &path, &test_id, "FAILURE", "no actual value");
+                write_line(writer, name, &test_id, "FAILURE", "no actual value");
               }
             } else if result.errors.is_some() {
-              write_line(writer, &path, &test_id, "FAILURE", &result.errors_as_string());
+              write_line(writer, name, &test_id, "FAILURE", &result.errors_as_string());
             } else {
-              write_line(writer, &path, &test_id, "FAILURE", format!("{:?}", result).as_str());
+              write_line(writer, name, &test_id, "FAILURE", format!("{:?}", result).as_str());
             }
           }
           Err(reason) => {
-            write_line(writer, &path, &test_id, "FAILURE", &reason.to_string());
+            write_line(writer, name, &test_id, "FAILURE", &reason.to_string());
           }
         },
         Err(reason) => {
-          write_line(writer, &path, &test_id, "FAILURE", &reason.to_string());
+          write_line(writer, name, &test_id, "FAILURE", &reason.to_string());
         }
       }
     }
@@ -245,28 +195,20 @@ fn execute_tests(
   Ok(())
 }
 
-fn write_line(writer: &mut BufWriter<File>, path: &Path, test_id: &str, test_result: &str, remarks: &str) {
-  let dir_name = path
-    .parent()
-    .expect("taking parent path failed")
-    .to_str()
-    .expect("converting parent path to string failed");
-  let file_name = path
-    .file_stem()
-    .expect("taking file stem failed")
-    .to_str()
-    .expect("converting file stem to string failed");
+fn write_line(writer: &mut BufWriter<File>, name: &str, test_id: &str, test_result: &str, remarks: &str) {
+  let dir_name = dir_name(name);
+  let file_name = file_name(name);
   writeln!(
     writer,
     r#""{}","{}","{}","{}","{}""#,
     dir_name, file_name, test_id, test_result, remarks
   )
-  .expect("writing output line failed");
+  .unwrap();
   match test_result.to_lowercase().as_str() {
     "failure" => {
       FAILURE_COUNT.fetch_add(1, Ordering::Relaxed);
       eprintln!("FAILURE: {}", remarks);
-      exit(0);
+      exit(82);
     }
     "success" => {
       SUCCESS_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -284,6 +226,42 @@ fn get_writer() -> BufWriter<File> {
   BufWriter::new(file)
 }
 
+fn sorted_files(path: &Path, ext: &str) -> Result<Vec<String>> {
+  let mut files = search_files(path, ext)?;
+  files.sort();
+  Ok(files)
+}
+
+fn search_files(path: &Path, ext: &str) -> Result<Vec<String>> {
+  let mut files = vec![];
+  if let Ok(entries) = fs::read_dir(path) {
+    for entry in entries {
+      if let Ok(entry) = entry {
+        let path = entry.path();
+        if path.is_dir() {
+          files.append(search_files(&path, ext)?.as_mut());
+        } else if let Some(extension) = path.extension() {
+          if extension == ext {
+            files.push(path.canonicalize().unwrap().display().to_string());
+          }
+        }
+      }
+    }
+  }
+  Ok(files)
+}
+
+/// Retrieves the parent path without file name from given `name`.
+pub fn dir_name(name: &str) -> String {
+  Path::new(name).parent().unwrap().to_str().unwrap().to_string()
+}
+
+/// Retrieves the file name with extension from given `name`.
+pub fn file_name(name: &str) -> String {
+  Path::new(name).file_name().unwrap().to_str().unwrap().to_string()
+}
+
+/// Displays usage message.
 fn usage() {
-  println!("Do the help, please...")
+  println!("Help waits for you :-)")
 }

@@ -28,7 +28,6 @@
 use crate::errors::RunnerError;
 use libc::{c_char, c_int, c_uint};
 use std::ffi::CString;
-use std::path::Path;
 
 /// Fake `xmlSchema` struct from C `libxml2`.
 enum XmlSchema {}
@@ -84,9 +83,8 @@ fn get_test_cases_schema() -> XmlSchemaPtr {
 }
 
 /// Validates the test cases file.
-pub fn validate_test_cases_file(path: &Path) -> Result<(), RunnerError> {
-  let path_str = format!("{}", path.display());
-  let c_path = CString::new(path_str).unwrap();
+pub fn validate_test_cases_file(file_name: &str) -> Result<(), RunnerError> {
+  let c_path = CString::new(file_name).unwrap();
   unsafe {
     let schema_valid_ctxt = xmlSchemaNewValidCtxt(TEST_CASE_SCHEMA_PTR.0);
     let result = xmlSchemaValidateFile(schema_valid_ctxt, c_path.as_ptr(), 0);

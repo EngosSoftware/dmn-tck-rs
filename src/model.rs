@@ -20,7 +20,6 @@ use crate::errors::RunnerError;
 use crate::errors::RunnerError::*;
 use roxmltree::Node;
 use std::fs::read_to_string;
-use std::path::Path;
 
 const XSI: &str = "http://www.w3.org/2001/XMLSchema-instance";
 
@@ -155,8 +154,8 @@ impl Default for List {
 }
 
 /// Parses the XML file containing test cases.
-pub fn parse_from_file(p: &Path) -> Result<TestCases, RunnerError> {
-  match read_to_string(p) {
+pub fn parse_from_file(file_name: &str) -> Result<TestCases, RunnerError> {
+  match read_to_string(file_name) {
     Ok(content) => parse_from_string(&content),
     Err(reason) => Err(ReadingFileFailed(format!("{}", reason))),
   }

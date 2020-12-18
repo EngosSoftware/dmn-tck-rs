@@ -17,7 +17,6 @@
 //!
 
 use crate::model::{Component, InputNode, List, Simple, Value};
-use serde::export::Formatter;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InputNodeDto {

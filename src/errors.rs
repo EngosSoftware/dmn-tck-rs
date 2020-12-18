@@ -14,10 +14,13 @@
  *  limitations under the License.
  */
 
-//! Error definitions.
+//! Result and error definitions.
+
+pub type Result<T, E = RunnerError> = std::result::Result<T, E>;
 
 #[derive(Debug, PartialEq)]
 pub enum RunnerError {
+  IOError(String),
   ReadingFileFailed(String),
   ParsingXMLFailed(String),
   ValidatingXMLFailed(i32),
@@ -28,3 +31,9 @@ pub enum RunnerError {
 }
 
 // TODO Implement Display trait to make error reporting more verbose and user friendly.
+
+impl From<std::io::Error> for RunnerError {
+  fn from(err: std::io::Error) -> Self {
+    Self::IOError(err.to_string())
+  }
+}

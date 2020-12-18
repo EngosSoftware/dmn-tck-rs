@@ -22,8 +22,8 @@ impl<T> ResultDto<T> {
     self
       .errors
       .as_ref()
-      .and_then(|v| Some(v.iter().map(|e| e.details.clone()).collect::<Vec<String>>().join(", ")))
-      .unwrap_or("".to_string())
+      .map(|v| v.iter().map(|e| e.details.clone()).collect::<Vec<String>>().join(", "))
+      .unwrap_or_else(|| "".to_string())
   }
 }
 
