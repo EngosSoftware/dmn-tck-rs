@@ -129,13 +129,13 @@ fn deploy_dmn_definitions(dmn_file: &str, client: &Client, deploy_url: &str) -> 
   Ok(())
 }
 
-fn execute_tests(writer: &mut BufWriter<File>, name: &str, client: &Client, evaluate_url: &str) -> Result<()> {
-  println!("\nProcessing file: {}", name);
+fn execute_tests(writer: &mut BufWriter<File>, file_name: &str, client: &Client, evaluate_url: &str) -> Result<()> {
+  println!("\nProcessing file: {}", file_name);
   print!("Validating...");
-  validate_test_cases_file(name)?;
+  validate_test_cases_file(file_name)?;
   print!("OK");
   print!(",  Parsing...");
-  let test_cases = parse_from_file(name)?;
+  let test_cases = parse_from_file(file_name)?;
   println!("OK");
   let empty_id = String::new();
   for test_case in &test_cases.test_cases {
@@ -164,29 +164,29 @@ fn execute_tests(writer: &mut BufWriter<File>, name: &str, client: &Client, eval
                 if let Some(expected) = &result_node.expected {
                   let expected_dto = ValueDto::from(expected);
                   if actual_dto == expected_dto {
-                    write_line(writer, name, &test_id, "SUCCESS", "");
+                    write_line(writer, file_name, &test_id, "SUCCESS", "");
                   } else {
                     let remarks = format!("actual <> expected : {:?} <<>> {:?}", actual_dto, expected_dto);
-                    write_line(writer, name, &test_id, "FAILURE", &remarks);
+                    write_line(writer, file_name, &test_id, "FAILURE", &remarks);
                   }
                 } else {
-                  write_line(writer, name, &test_id, "FAILURE", "no expected value");
+                  write_line(writer, file_name, &test_id, "FAILURE", "no expected value");
                 }
               } else {
-                write_line(writer, name, &test_id, "FAILURE", "no actual value");
+                write_line(writer, file_name, &test_id, "FAILURE", "no actual value");
               }
             } else if result.errors.is_some() {
-              write_line(writer, name, &test_id, "FAILURE", &result.errors_as_string());
+              write_line(writer, file_name, &test_id, "FAILURE", &result.errors_as_string());
             } else {
-              write_line(writer, name, &test_id, "FAILURE", format!("{:?}", result).as_str());
+              write_line(writer, file_name, &test_id, "FAILURE", format!("{:?}", result).as_str());
             }
           }
           Err(reason) => {
-            write_line(writer, name, &test_id, "FAILURE", &reason.to_string());
+            write_line(writer, file_name, &test_id, "FAILURE", &reason.to_string());
           }
         },
         Err(reason) => {
-          write_line(writer, name, &test_id, "FAILURE", &reason.to_string());
+          write_line(writer, file_name, &test_id, "FAILURE", &reason.to_string());
         }
       }
     }
@@ -194,13 +194,15 @@ fn execute_tests(writer: &mut BufWriter<File>, name: &str, client: &Client, eval
   Ok(())
 }
 
-fn write_line(writer: &mut BufWriter<File>, name: &str, test_id: &str, test_result: &str, remarks: &str) {
-  let dir_name = dir_name(name);
-  let file_name = file_name(name);
+fn write_line(writer: &mut BufWriter<File>, test_file_name: &str, test_id: &str, test_result: &str, remarks: &str) {
   writeln!(
     writer,
     r#""{}","{}","{}","{}","{}""#,
-    dir_name, file_name, test_id, test_result, remarks
+    dir_name(test_file_name),
+    file_name(test_file_name),
+    test_id,
+    test_result,
+    remarks
   )
   .unwrap();
   match test_result.to_lowercase().as_str() {
