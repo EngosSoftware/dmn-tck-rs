@@ -2,7 +2,7 @@
 /dmn-tck-dev
 /target
 /.idea
-report.csv
+*.csv
 *.iml
 *.iws
 .*ipr

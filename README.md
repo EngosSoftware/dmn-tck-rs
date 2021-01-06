@@ -13,3 +13,14 @@ Licensed under the Apache License, Version 2.0. See LICENSE for details.
 All product names, logos, and brands are property of their respective owners.
 All company, product and service names used in this project are for identification purposes only.
 Use of these names, logos, and brands does not imply endorsement.
+
+### Testing progress
+
+#### 2021-01-06 13:52
+
+```
+    Total: 1752
+  Success: 41
+  Failure: 1711
+    Other: 0
+```

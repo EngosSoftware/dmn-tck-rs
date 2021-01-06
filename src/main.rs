@@ -24,7 +24,6 @@ extern crate serde_json;
 
 use std::fs;
 use std::path::Path;
-use std::process::exit;
 
 use http::Uri;
 use reqwest::blocking::Client;
@@ -208,7 +207,7 @@ fn write_line(writer: &mut BufWriter<File>, name: &str, test_id: &str, test_resu
     "failure" => {
       FAILURE_COUNT.fetch_add(1, Ordering::Relaxed);
       eprintln!("FAILURE: {}", remarks);
-      exit(82);
+      // exit(82);
     }
     "success" => {
       SUCCESS_COUNT.fetch_add(1, Ordering::Relaxed);
