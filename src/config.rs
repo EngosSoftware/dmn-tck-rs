@@ -11,6 +11,8 @@ pub struct ConfigurationParams {
   pub evaluate_url: String,
   /// Path to write csv report file.
   pub report_file_path: String,
+  /// Flag indicating if testing should immediately stop when a test fails.
+  pub stop_on_failure: bool,
 }
 
 pub fn get() -> ConfigurationParams {

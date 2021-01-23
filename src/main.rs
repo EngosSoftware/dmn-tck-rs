@@ -36,7 +36,7 @@ use crate::results::{DeployResult, ResultDto};
 use crate::validator::validate_test_cases_file;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 mod config;
 mod dto;
@@ -51,10 +51,14 @@ mod validator;
 static SUCCESS_COUNT: AtomicU64 = AtomicU64::new(0);
 static FAILURE_COUNT: AtomicU64 = AtomicU64::new(0);
 static OTHER_COUNT: AtomicU64 = AtomicU64::new(0);
+static STOP_ON_FAILURE: AtomicBool = AtomicBool::new(false);
+
+const ORDERING: Ordering = Ordering::SeqCst;
 
 /// Main entrypoint of the runner.
 fn main() -> Result<()> {
   let config = config::get();
+  STOP_ON_FAILURE.fetch_or(config.stop_on_failure, ORDERING);
   let dir_path = Path::new(&config.test_cases_dir_path);
   if dir_path.exists() && dir_path.is_dir() {
     println!("Starting DMN TCK runner...");
@@ -72,9 +76,9 @@ fn main() -> Result<()> {
     }
     println!("Processed {} *.xml files.", xml_files.len());
     writer.flush().expect("flushing output file failed");
-    let success_count = SUCCESS_COUNT.load(Ordering::Relaxed);
-    let failure_count = FAILURE_COUNT.load(Ordering::Relaxed);
-    let other_count = OTHER_COUNT.load(Ordering::Relaxed);
+    let success_count = SUCCESS_COUNT.load(ORDERING);
+    let failure_count = FAILURE_COUNT.load(ORDERING);
+    let other_count = OTHER_COUNT.load(ORDERING);
     println!("-----------------");
     println!("    Total: {}", success_count + failure_count + other_count);
     println!("  Success: {}", success_count);
@@ -208,16 +212,18 @@ fn write_line(writer: &mut BufWriter<File>, test_file_name: &str, test_id: &str,
   .unwrap();
   match test_result.to_lowercase().as_str() {
     "failure" => {
-      FAILURE_COUNT.fetch_add(1, Ordering::Relaxed);
+      FAILURE_COUNT.fetch_add(1, ORDERING);
       eprintln!("FAILURE: {}", remarks);
-      // exit(82);
+      if STOP_ON_FAILURE.load(ORDERING) {
+        std::process::exit(1);
+      }
     }
     "success" => {
-      SUCCESS_COUNT.fetch_add(1, Ordering::Relaxed);
+      SUCCESS_COUNT.fetch_add(1, ORDERING);
       println!("SUCCESS");
     }
     _ => {
-      OTHER_COUNT.fetch_add(1, Ordering::Relaxed);
+      OTHER_COUNT.fetch_add(1, ORDERING);
       println!("{}: {}", test_result, remarks);
     }
   }
