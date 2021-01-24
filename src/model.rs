@@ -296,6 +296,7 @@ fn parse_value_components(node: &Node) -> Option<Vec<Component>> {
     })
   }
   if !items.is_empty() {
+    items.sort_by(|a, b| a.name.cmp(&b.name));
     return Some(items);
   }
   None
