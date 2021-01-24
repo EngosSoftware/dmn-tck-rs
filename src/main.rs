@@ -170,9 +170,9 @@ fn execute_tests(writer: &mut BufWriter<File>, file_name: &str, client: &Client,
                   if actual_dto == expected_dto {
                     write_line(writer, file_name, &test_id, "SUCCESS", "");
                   } else {
-                    write_line(writer, file_name, &test_id, "FAILURE", "actual <> expected");
                     eprintln!("  actual: {:?}", actual_dto);
                     eprintln!("expected: {:?}", expected_dto);
+                    write_line(writer, file_name, &test_id, "FAILURE", "actual <> expected");
                   }
                 } else {
                   write_line(writer, file_name, &test_id, "FAILURE", "no expected value");
