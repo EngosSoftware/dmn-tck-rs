@@ -16,6 +16,16 @@ Use of these names, logos, and brands does not imply endorsement.
 
 ### Testing progress
 
+#### MORE THAN A HALF OF THE COMPATIBILITY TESTS ALREADY PASSES! 
+
+2021-02-01 19:22
+```
+    Total: 1752
+  Success: 904
+  Failure: 848
+    Other: 0
+```
+
 2021-01-29 21:02
 ```
     Total: 1752

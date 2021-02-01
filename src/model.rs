@@ -314,8 +314,6 @@ fn parse_value_list(node: &Node) -> Option<List> {
         items.push(value_type)
       }
     }
-  }
-  if !items.is_empty() {
     return Some(List { items, nil: false });
   }
   None
