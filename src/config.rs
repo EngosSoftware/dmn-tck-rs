@@ -5,6 +5,9 @@ use std::fs;
 pub struct ConfigurationParams {
   /// Path to directory containing test cases.
   pub test_cases_dir_path: String,
+  /// Pattern for matching test file names.
+  /// Only files whose name matches the pattern will be processed.
+  pub file_name_pattern: String,
   /// URL to REST service where dmn definitions will be deployed.
   pub deploy_url: String,
   /// URL to REST service where dmn definitions will be evaluated.

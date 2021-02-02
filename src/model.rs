@@ -276,10 +276,16 @@ fn parse_child_value_type(node: &Node, child_name: &str) -> Option<Value> {
 /// Parses simple value.
 fn parse_simple_value(node: &Node) -> Option<Simple> {
   if let Some(ref value_node) = node.children().find(|n| n.tag_name().name() == NODE_VALUE) {
-    return Some(Simple {
-      typ: optional_xsi_type_attribute(value_node),
-      text: optional_content(value_node),
-      nil: optional_nil_attribute(value_node),
+    let typ = optional_xsi_type_attribute(value_node);
+    let text = optional_content(value_node);
+    let nil = optional_nil_attribute(value_node);
+    return Some(match (typ.is_some(), text.is_some(), nil) {
+      (true, false, false) => Simple {
+        typ,
+        text: Some("".to_string()),
+        nil,
+      },
+      _ => Simple { typ, text, nil },
     });
   }
   None

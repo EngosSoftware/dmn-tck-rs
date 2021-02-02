@@ -18,6 +18,8 @@
 
 use crate::model::{Component, InputNode, List, Simple, Value};
 
+pub type ActualValueDto = ExpectedValueDto;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InputNodeDto {
   #[serde(rename = "name")]

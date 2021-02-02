@@ -20,6 +20,7 @@
 extern crate lazy_static;
 #[macro_use]
 extern crate serde_derive;
+extern crate regex;
 extern crate serde_json;
 
 use std::fs;
@@ -28,12 +29,13 @@ use std::path::Path;
 use http::Uri;
 use reqwest::blocking::Client;
 
-use crate::dto::{ExpectedValueDto, InputNodeDto, ValueDto};
+use crate::dto::{ActualValueDto, InputNodeDto, ValueDto};
 use crate::errors::{Result, RunnerError};
 use crate::model::parse_from_file;
 use crate::params::{DeployParams, EvaluateParams};
 use crate::results::{DeployResult, ResultDto};
 use crate::validator::validate_test_cases_file;
+use regex::Regex;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -58,19 +60,20 @@ const ORDERING: Ordering = Ordering::SeqCst;
 /// Main entrypoint of the runner.
 fn main() -> Result<()> {
   let config = config::get();
+  let pattern = config.file_name_pattern;
   STOP_ON_FAILURE.fetch_or(config.stop_on_failure, ORDERING);
   let dir_path = Path::new(&config.test_cases_dir_path);
   if dir_path.exists() && dir_path.is_dir() {
     println!("Starting DMN TCK runner...");
     let client = reqwest::blocking::Client::new();
     println!("Searching DMN files in directory: {}", dir_path.display());
-    let dmn_files = sorted_files(dir_path, "dmn")?;
+    let dmn_files = sorted_files(dir_path, "dmn", &pattern)?;
     for dmn_file in &dmn_files {
       deploy_dmn_definitions(dmn_file, &client, &config.deploy_url)?;
     }
     println!("\n\nDeployed {} *.dmn files.\n", dmn_files.len());
     let mut writer = get_writer();
-    let xml_files = sorted_files(dir_path, "xml")?;
+    let xml_files = sorted_files(dir_path, "xml", &pattern)?;
     for xml_file in &xml_files {
       execute_tests(&mut writer, xml_file, &client, &config.evaluate_url)?;
     }
@@ -161,8 +164,9 @@ fn execute_tests(writer: &mut BufWriter<File>, file_name: &str, client: &Client,
         input: test_case.input_nodes.iter().map(InputNodeDto::from).collect(),
       };
       match client.post(evaluate_url).json(&params).send() {
-        Ok(response) => match response.json::<ResultDto<ExpectedValueDto>>() {
+        Ok(response) => match response.json::<ResultDto<ActualValueDto>>() {
           Ok(result) => {
+            // println!("{:?}", result);
             if let Some(data) = result.data {
               if let Some(actual_dto) = data.value {
                 if let Some(expected) = &result_node.expected {
@@ -234,23 +238,34 @@ fn get_writer() -> BufWriter<File> {
   BufWriter::new(file)
 }
 
-fn sorted_files(path: &Path, ext: &str) -> Result<Vec<String>> {
-  let mut files = search_files(path, ext)?;
+fn sorted_files(path: &Path, ext: &str, pattern: &str) -> Result<Vec<String>> {
+  let mut files = search_files(path, ext, pattern)?;
   files.sort();
   Ok(files)
 }
 
-fn search_files(path: &Path, ext: &str) -> Result<Vec<String>> {
+fn search_files(path: &Path, ext: &str, pattern: &str) -> Result<Vec<String>> {
   let mut files = vec![];
   if let Ok(entries) = fs::read_dir(path) {
     for entry in entries {
       if let Ok(entry) = entry {
         let path = entry.path();
         if path.is_dir() {
-          files.append(search_files(&path, ext)?.as_mut());
+          files.append(search_files(&path, ext, pattern)?.as_mut());
         } else if let Some(extension) = path.extension() {
           if extension == ext {
-            files.push(path.canonicalize().unwrap().display().to_string());
+            let file_name = path.canonicalize().unwrap().display().to_string();
+            if pattern.is_empty() {
+              files.push(file_name);
+            } else {
+              if let Ok(re) = Regex::new(pattern) {
+                if re.is_match(&file_name) {
+                  files.push(file_name);
+                }
+              } else {
+                println!("Invalid matching pattern: '{}'", pattern)
+              }
+            }
           }
         }
       }
