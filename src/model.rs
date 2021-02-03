@@ -62,6 +62,36 @@ pub enum TestCaseType {
   DecisionService,
 }
 
+impl From<String> for TestCaseType {
+  fn from(value: String) -> Self {
+    match value.to_lowercase().trim() {
+      "bkm" => Self::BusinessKnowledgeModel,
+      "decisionService" => Self::DecisionService,
+      _ => Self::Decision,
+    }
+  }
+}
+
+impl From<Option<String>> for TestCaseType {
+  fn from(value: Option<String>) -> Self {
+    if let Some(s) = value {
+      return Self::from(s);
+    }
+    TestCaseType::Decision
+  }
+}
+
+impl ToString for TestCaseType {
+  fn to_string(&self) -> String {
+    match self {
+      TestCaseType::Decision => "decision",
+      TestCaseType::BusinessKnowledgeModel => "bkm",
+      TestCaseType::DecisionService => "decisionService",
+    }
+    .to_string()
+  }
+}
+
 /// Single test case.
 #[derive(Debug)]
 pub struct TestCase {
@@ -95,7 +125,7 @@ pub struct InputNode {
 pub struct ResultNode {
   pub name: String,
   pub error_result: bool,
-  pub typ: Option<String>,
+  pub typ: TestCaseType,
   pub cast: Option<String>,
   pub expected: Option<Value>,
   pub computed: Option<Value>,
@@ -241,7 +271,7 @@ fn parse_result_nodes(node: &Node) -> Result<Vec<ResultNode>, RunnerError> {
     items.push(ResultNode {
       name: required_attribute(result_node, ATTR_NAME)?,
       error_result: optional_attribute(result_node, ATTR_ERROR_RESULT).map_or(false, |v| v == "true"),
-      typ: optional_attribute(result_node, ATTR_TYPE),
+      typ: optional_attribute(result_node, ATTR_TYPE).into(),
       cast: optional_attribute(result_node, ATTR_CAST),
       expected: parse_child_value_type(result_node, NODE_EXPECTED),
       computed: parse_child_value_type(result_node, NODE_COMPUTED),

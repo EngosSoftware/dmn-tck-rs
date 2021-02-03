@@ -82,11 +82,24 @@ fn main() -> Result<()> {
     let success_count = SUCCESS_COUNT.load(ORDERING);
     let failure_count = FAILURE_COUNT.load(ORDERING);
     let other_count = OTHER_COUNT.load(ORDERING);
+    let total_count = success_count + failure_count + other_count;
     println!("-----------------");
-    println!("    Total: {}", success_count + failure_count + other_count);
-    println!("  Success: {}", success_count);
-    println!("  Failure: {}", failure_count);
-    println!("    Other: {}", other_count);
+    println!("    Total: {:>4}", total_count);
+    println!(
+      "  Success: {:>4}{:>6.1}%",
+      success_count,
+      (success_count * 100) as f64 / total_count as f64
+    );
+    println!(
+      "  Failure: {:>4}{:>6.1}%",
+      failure_count,
+      (failure_count * 100) as f64 / total_count as f64
+    );
+    println!(
+      "    Other: {:>4}{:>6.1}%",
+      other_count,
+      (other_count * 100) as f64 / total_count as f64
+    );
   } else {
     usage();
   }
@@ -149,10 +162,7 @@ fn execute_tests(writer: &mut BufWriter<File>, file_name: &str, client: &Client,
     let test_id = test_case.id.as_ref().unwrap_or(&empty_id);
     for result_node in &test_case.result_nodes {
       let name = &result_node.name;
-      let artifact = match &result_node.typ {
-        Some(typ) => typ.clone(),
-        _ => format!("{:?}", test_case.typ),
-      };
+      let artifact = result_node.typ.to_string();
       println!(
         "Executing test case: {}, result name: '{}', artifact: '{}'",
         test_id, name, artifact

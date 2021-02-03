@@ -16,6 +16,13 @@ Use of these names, logos, and brands does not imply endorsement.
 
 ### Testing progress
 
+2021-02-03 19:25
+```
+    Total: 1752
+  Success: 1178  67.2%
+  Failure:  574  32.8%
+    Other:    0   0.0%
+```
 2021-02-02 18:56
 ```
     Total: 1752
@@ -24,7 +31,6 @@ Use of these names, logos, and brands does not imply endorsement.
     Other: 0
 ```
 #### MORE THAN A HALF OF THE COMPATIBILITY TESTS ALREADY PASSES! 
-
 2021-02-01 19:22
 ```
     Total: 1752
@@ -32,7 +38,6 @@ Use of these names, logos, and brands does not imply endorsement.
   Failure: 848
     Other: 0
 ```
-
 2021-01-29 21:02
 ```
     Total: 1752
@@ -40,7 +45,6 @@ Use of these names, logos, and brands does not imply endorsement.
   Failure: 921
     Other: 0
 ```
-
 2021-01-28 19:19
 ```
     Total: 1752
@@ -48,7 +52,6 @@ Use of these names, logos, and brands does not imply endorsement.
   Failure: 922
     Other: 0
 ```
-
 2021-01-24 21:51
 ```
     Total: 1752
@@ -56,7 +59,6 @@ Use of these names, logos, and brands does not imply endorsement.
   Failure: 943
     Other: 0
 ```
-
 2021-01-24 20:45
 ```
     Total: 1752
@@ -64,7 +66,6 @@ Use of these names, logos, and brands does not imply endorsement.
   Failure: 980
     Other: 0
 ```
-
 2021-01-24 14:03
 ```
     Total: 1752
@@ -72,7 +73,6 @@ Use of these names, logos, and brands does not imply endorsement.
   Failure: 998
     Other: 0
 ```
-
 2021-01-23 23:16
 ```
     Total: 1752
@@ -80,7 +80,6 @@ Use of these names, logos, and brands does not imply endorsement.
   Failure: 1005
     Other: 0
 ```
-
 2021-01-21 19:27
 ```
     Total: 1752
@@ -88,7 +87,6 @@ Use of these names, logos, and brands does not imply endorsement.
   Failure: 1013
     Other: 0
 ```
-
 2021-01-11 19:24
 ```
     Total: 1752
@@ -96,7 +94,6 @@ Use of these names, logos, and brands does not imply endorsement.
   Failure: 1678
     Other: 0
 ```
-
 2021-01-06 19:17
 ```
     Total: 1752
@@ -104,7 +101,6 @@ Use of these names, logos, and brands does not imply endorsement.
   Failure: 1681
     Other: 0
 ```
-
 2021-01-06 18:41
 ```
     Total: 1752
@@ -112,7 +108,6 @@ Use of these names, logos, and brands does not imply endorsement.
   Failure: 1702
     Other: 0
 ```
-
 2021-01-06 13:52
 ```
     Total: 1752
