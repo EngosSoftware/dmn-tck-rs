@@ -19,7 +19,7 @@ Use of these names, logos, and brands does not imply endorsement.
 2021-02-03 19:25
 ```
     Total: 1752
-  Success: 1178  67.2%
+  Success: 1178  67.2%  
   Failure:  574  32.8%
     Other:    0   0.0%
 ```
@@ -30,7 +30,6 @@ Use of these names, logos, and brands does not imply endorsement.
   Failure: 598
     Other: 0
 ```
-#### MORE THAN A HALF OF THE COMPATIBILITY TESTS ALREADY PASSES! 
 2021-02-01 19:22
 ```
     Total: 1752
