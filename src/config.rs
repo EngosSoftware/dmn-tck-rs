@@ -1,5 +1,3 @@
-use std::fs;
-
 /// Runner configuration parameters.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigurationParams {
@@ -19,6 +17,14 @@ pub struct ConfigurationParams {
 }
 
 pub fn get() -> ConfigurationParams {
-  let file_content = fs::read_to_string("runner.yml").expect("reading configuration file failed");
-  serde_yaml::from_str(&file_content).expect("parsing configuration failed")
+  let args: Vec<String> = std::env::args().collect();
+  let cfg_file_name = if args.len() == 2 {
+    args[1].as_str()
+  } else {
+    "runner.yml"
+  };
+  let err_read = format!("reading configuration file '{}' failed", cfg_file_name);
+  let file_content = std::fs::read_to_string(cfg_file_name).expect(&err_read);
+  let err_parse = format!("parsing configuration file '{}' failed", cfg_file_name);
+  serde_yaml::from_str(&file_content).expect(&err_parse)
 }

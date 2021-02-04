@@ -1,7 +1,8 @@
 /dmn-tck
 /dmn-tck-dev
 /target
-/.idea
+.idea/*
+!/.idea/runConfigurations
 *.csv
 *.iml
 *.iws

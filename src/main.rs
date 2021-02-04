@@ -83,23 +83,20 @@ fn main() -> Result<()> {
     let failure_count = FAILURE_COUNT.load(ORDERING);
     let other_count = OTHER_COUNT.load(ORDERING);
     let total_count = success_count + failure_count + other_count;
+    let (success_perc, failure_perc, other_perc) = if total_count > 0 {
+      (
+        (success_count * 100) as f64 / total_count as f64,
+        (failure_count * 100) as f64 / total_count as f64,
+        (other_count * 100) as f64 / total_count as f64,
+      )
+    } else {
+      (0., 0., 0.)
+    };
     println!("-----------------");
     println!("    Total: {:>4}", total_count);
-    println!(
-      "  Success: {:>4}{:>6.1}%",
-      success_count,
-      (success_count * 100) as f64 / total_count as f64
-    );
-    println!(
-      "  Failure: {:>4}{:>6.1}%",
-      failure_count,
-      (failure_count * 100) as f64 / total_count as f64
-    );
-    println!(
-      "    Other: {:>4}{:>6.1}%",
-      other_count,
-      (other_count * 100) as f64 / total_count as f64
-    );
+    println!("  Success: {:>4}{:>6.1}%", success_count, success_perc);
+    println!("  Failure: {:>4}{:>6.1}%", failure_count, failure_perc);
+    println!("    Other: {:>4}{:>6.1}%", other_count, other_perc);
   } else {
     usage();
   }
