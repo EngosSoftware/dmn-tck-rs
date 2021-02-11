@@ -16,6 +16,21 @@ Use of these names, logos, and brands does not imply endorsement.
 
 ## Testing progress
 
+2021-02-11 20:55
+```
+    Total: 1752
+  Success: 1507  86.0%
+  Failure:  245  14.0%
+    Other:    0   0.0%
+```
+2021-02-10 23:12
+```
+    Total: 1752
+  Success: 1430  81.6%
+  Failure:  322  18.4%
+    Other:    0   0.0%
+
+```
 2021-02-08 20:48
 ```
     Total: 1752

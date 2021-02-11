@@ -1,5 +1,5 @@
 test_cases_dir_path: ../tck/TestCases
-file_name_pattern: compliance-level-3/0070
+file_name_pattern: compliance-level-3/0082
 deploy_url: http://0.0.0.0:12000/redeploy-definitions
 evaluate_url: http://0.0.0.0:12000/evl
 report_file_path: report.csv
